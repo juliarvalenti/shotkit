@@ -19,7 +19,8 @@ import { policyArgs, policyKey } from "../src/network.mjs";
 import { resolveViewport, viewportList } from "../src/viewports.mjs";
 import { locate, parseAction } from "../src/actions.mjs";
 import { backdrop, palette } from "../src/theme.mjs";
-import { CANVAS_VARS, VEIL, canvasDocument } from "../src/canvas.mjs";
+import { ART_RENDERING, CANVAS_VARS, VEIL, canvasDocument } from "../src/canvas.mjs";
+import { CANVAS_PIXELATED } from "../src/project.mjs";
 import { cardDocument } from "../src/card.mjs";
 import { encodeArgs, findEncoder, forgetEncoder, jpegSize, startEncoder } from "../src/encode.mjs";
 import { parseZoom } from "../src/video.mjs";
@@ -329,7 +330,10 @@ test("a card grows an artwork layer only when there is artwork", () => {
   assert.ok(!cardDocument("hi", { backdrop: "ink" }).includes('id="art"'));
   const art = cardDocument("hi", { backdrop: "canvas", art: "url(data:image/png;base64,AA) center/cover" });
   assert.ok(art.includes('id="art"'));
-  assert.ok(art.includes("image-rendering:auto"), "a canvas upscales smooth unless the project says pixelated");
+  // Whichever the project running the test asks for: smooth by default, hard
+  // edges where its shotkit.config.json says pixelated.
+  assert.ok(art.includes(`image-rendering:${ART_RENDERING}`), "the art layer upscales the way the project said");
+  assert.equal(ART_RENDERING, CANVAS_PIXELATED ? "pixelated" : "auto");
 });
 
 /**

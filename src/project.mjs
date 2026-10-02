@@ -22,7 +22,18 @@
  *       "mockHeader": "x-mock",             // response header proving a server is the mock one
  *       "mockProbe": "/api/health"          // a route that carries it (default "/")
  *     },
- *     "backdrop": { "canvas": "scripts/canvas.js" }  // source for --backdrop mycelial
+ *     "backdrop": {
+ *       "canvas": "scripts/canvas.js",       // source for --backdrop mycelial
+ *       "glass": "docs/glass.js"             // source for --backdrop glass
+ *     },
+ *     "stage": {                             // how a staged video's words look
+ *       "fonts": "https://…/css2?family=…",  // a stylesheet for the faces below
+ *       "titleFont": "\"Cormorant Garamond\", Georgia, serif",
+ *       "titleStyle": "italic 600",          // weight/style of the headline
+ *       "textFont": "\"IBM Plex Sans\", sans-serif",
+ *       "accent": "#5dd4e0",
+ *       "logo": "docs/logo.png"              // shown on the intro and outro cards
+ *     }
  *   }
  */
 
@@ -73,3 +84,15 @@ export const MOCK_HEADER = config.app?.mockHeader ?? null;
 export const MOCK_PROBE = config.app?.mockProbe ?? "/";
 /** @type {string | null} absolute path, or null when the project names none */
 export const CANVAS_PATH = config.backdrop?.canvas ? resolve(PROJECT_ROOT, config.backdrop.canvas) : null;
+/** @type {string | null} absolute path, or null when the project names none */
+export const GLASS_PATH = config.backdrop?.glass ? resolve(PROJECT_ROOT, config.backdrop.glass) : null;
+/** How a staged video's captions and title cards look; every field optional. */
+export const STAGE_STYLE = {
+  fonts: config.stage?.fonts ?? null,
+  titleFont: config.stage?.titleFont ?? null,
+  titleStyle: config.stage?.titleStyle ?? null,
+  textFont: config.stage?.textFont ?? null,
+  accent: config.stage?.accent ?? null,
+  /** @type {string | null} absolute path */
+  logo: config.stage?.logo ? resolve(PROJECT_ROOT, config.stage.logo) : null,
+};

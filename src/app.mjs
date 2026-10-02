@@ -12,7 +12,9 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:net";
 import { APP_DIR, MOCK_ENV, MOCK_HEADER, MOCK_PROBE, MOCK_SCRIPT } from "./project.mjs";
 
@@ -157,23 +159,32 @@ export async function ensureMockServer({ log = () => {} } = {}) {
   const port = await freePort();
   log(`booting ${MOCK_SCRIPT} on :${port}`);
   const [bin, args] = mockCommand(port);
+  // Output goes to a file, not a pipe: a dev server is left running across a
+  // daemon restart for the next one to adopt, and one still writing into a
+  // pipe whose reader has exited stalls on its next log line.
+  const logPath = join(tmpdir(), `shotkit-dev-mock-${port}.log`);
+  const logFd = openSync(logPath, "w");
   const proc = spawn(bin, args, {
     cwd: FRONTEND_DIR,
     env: { ...process.env, ...MOCK_ENV, PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", logFd, logFd],
     // Its own process group: `pnpm` is a wrapper, and signaling only the
     // wrapper orphans the next-server child, which then holds the directory
     // against every later boot.
     detached: true,
   });
 
+  closeSync(logFd);
   let transcript = "";
-  const watch = (d) => {
-    transcript += d;
-    if (process.env.SHOTKIT_DAEMON_VERBOSE) process.stderr.write(d);
+  const readLog = () => {
+    try {
+      transcript = readFileSync(logPath, "utf8");
+    } catch {
+      /* not written yet */
+    }
+    return transcript;
   };
-  proc.stdout?.on("data", watch);
-  proc.stderr?.on("data", watch);
+  if (process.env.SHOTKIT_DAEMON_VERBOSE) log(`${MOCK_SCRIPT} output: ${logPath}`);
 
   // Address the dev server as `localhost`, not `127.0.0.1`: Next's dev-server
   // cross-origin guard only allow-lists `localhost`, so a browser 403s on every
@@ -181,7 +192,7 @@ export async function ensureMockServer({ log = () => {} } = {}) {
   const url = `http://localhost:${port}`;
   try {
     await waitForServer(`${url}/`, 120_000, () => {
-      const m = ALREADY_RUNNING.exec(transcript);
+      const m = ALREADY_RUNNING.exec(readLog());
       if (m) throw Object.assign(new Error("adopt"), { adoptUrl: m[1] });
     });
   } catch (e) {
@@ -192,7 +203,7 @@ export async function ensureMockServer({ log = () => {} } = {}) {
       mockServer = { proc: null, url: e.adoptUrl, adopted: true };
       return e.adoptUrl;
     }
-    throw new Error(`${MOCK_SCRIPT} did not come up.\n${transcript.slice(-800)}`);
+    throw new Error(`${MOCK_SCRIPT} did not come up.\n${readLog().slice(-800)}`);
   }
 
   mockServer = { proc, url, adopted: false };

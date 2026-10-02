@@ -46,8 +46,8 @@ const CHROME = {
   chrome: { type: "boolean", help: "wrap the capture in browser window chrome" },
   address: { type: "string", help: "address-bar text (default: the route)" },
   "chrome-theme": { type: "string", value: "dark|light", help: "frame theme, when it differs from the app's" },
-  backdrop: { type: "string", value: "<preset|css>", help: "mycelial|mycelium|dusk|ink|paper|none, or any CSS" },
-  "backdrop-seed": { type: "number", help: "which network --backdrop mycelial grows" },
+  backdrop: { type: "string", value: "<preset|css>", help: "glass|mycelial|mycelium|dusk|ink|paper|none, or any CSS" },
+  "backdrop-seed": { type: "number", help: "which scene --backdrop glass|mycelial grows" },
   padding: { type: "number", help: "gutter around the frame (default 40)" },
   radius: { type: "number", help: "corner radius (default 12)" },
   shadow: { type: "boolean", help: "drop shadow (default on)" },
@@ -80,8 +80,11 @@ const STAGE = {
 const VIDEO_STAGE = {
   ...STAGE,
   backdrop: { type: "string", value: "<preset|css>", help: "the stage's ground: mycelium|dusk|ink|paper|none, or any CSS" },
-  "backdrop-seed": { type: "number", help: "which network --backdrop mycelial grows" },
+  "backdrop-seed": { type: "number", help: "which scene --backdrop glass|mycelial grows" },
   drift: { type: "number", value: "<deg>", help: "on a stage, swing the angle this far across the take (default 10; 0 holds still)" },
+  intro: { type: "string", value: "<title|line>", help: "on a stage, open on a title card (the project's logo, a title, a line under it)" },
+  outro: { type: "string", value: "<title|line>", help: "on a stage, close on a title card" },
+  "title-seconds": { type: "number", value: "<s>", help: "how long each title card holds (default 2.6)" },
 };
 
 const VIDEO = {
@@ -118,8 +121,8 @@ const DAEMON = {
 
 const CARD = {
   title: { type: "string", help: "title bar text" },
-  backdrop: { type: "string", value: "<preset|css>", help: "mycelial|mycelium|dusk|ink|paper|none, or any CSS" },
-  "backdrop-seed": { type: "number", help: "which network --backdrop mycelial grows" },
+  backdrop: { type: "string", value: "<preset|css>", help: "glass|mycelial|mycelium|dusk|ink|paper|none, or any CSS" },
+  "backdrop-seed": { type: "number", help: "which scene --backdrop glass|mycelial grows" },
   padding: { type: "number", help: "gutter around the card (default 40)" },
   radius: { type: "number", help: "corner radius (default 12)" },
   shadow: { type: "boolean", help: "drop shadow (default on)" },

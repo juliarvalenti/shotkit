@@ -23,6 +23,8 @@
  * recorder's business and not the caller's.
  */
 
+import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { OVERLAY_DEFAULTS, installOverlay } from "./cursor.mjs";
 import { defaultFormat, findEncoder, startEncoder } from "./encode.mjs";
 import { frameOf, policyOf, preparePage, seedStorage } from "./engine.mjs";
@@ -30,7 +32,8 @@ import { runActions } from "./actions.mjs";
 import { MAX_SPEED, frameSource, startPump } from "./pump.mjs";
 import { palette } from "./theme.mjs";
 import { isStaged, pickStage } from "./stage.mjs";
-import { restage, startSpool } from "./restage.mjs";
+import { restage, startSpool, titleFrames, writeSounds } from "./restage.mjs";
+import { STAGE_STYLE } from "./project.mjs";
 
 /** Timing, in ms. Beats a viewer can follow rather than the fastest that works. */
 export const TIMING = {
@@ -181,7 +184,21 @@ export async function record(eng, spec, ctx) {
       log,
     });
 
-    const cursor = makeCursor(page, { ...spec, log, timing, zoom: spec.zoom ?? VIDEO_DEFAULTS.zoom, pump });
+    /** @type {{beat:number, text:string}[] | undefined} */
+    const captions = staged ? [] : undefined;
+    /** Clicks and keystrokes, by the take beat they happen on, for a sound pass. */
+    /** @type {{beat:number, kind:string, [k:string]:unknown}[] | undefined} */
+    const sounds = staged ? [] : undefined;
+    const cursor = makeCursor(page, {
+      ...spec,
+      log,
+      timing,
+      zoom: spec.zoom ?? VIDEO_DEFAULTS.zoom,
+      pump,
+      captions,
+      sounds,
+      beat: () => spool?.frames ?? 0,
+    });
     // Three ways a take ends: the flow finishes, the video reaches --max-seconds
     // (the pump says so), or there is nothing left to record into. A sped-up
     // take can run far longer than the video it makes, so the wall clock is
@@ -191,7 +208,7 @@ export async function record(eng, spec, ctx) {
     const cap = new Promise((r) => {
       capTimer = setTimeout(() => r("over"), pump.budgetMs * MAX_SPEED);
     });
-    const flow = drive(page, spec, cursor, timing);
+    const flow = drive(page, spec, cursor, timing, log);
     // When the cap or a dead encoder wins the race the flow is still running,
     // and will fail into nobody's hands once the context closes under it. That
     // rejection is this take's business, not the process's.
@@ -215,14 +232,22 @@ export async function record(eng, spec, ctx) {
         drift: spec.drift ?? STAGE_DRIFT,
         theme: spec.theme ?? "dark",
         art: ctx.stageArt,
+        live: ctx.stageLive,
+        fps,
+        captions,
+        words: await stageWords(spec),
+        intro: spec.intro,
+        outro: spec.outro,
+        titleSeconds: spec.titleSeconds,
         frameWidth: Math.round(width / frame.scale),
         frameHeight: Math.round(height / frame.scale),
         quality: spec.quality ?? VIDEO_DEFAULTS.quality,
         encoder: encode,
         log,
       });
-      ({ width, height } = result);
+      ({ width, height, frames } = result);
       staging = { tilt: stage.tilt, drift: spec.drift ?? STAGE_DRIFT, rendered: result.rendered, ms: Date.now() - tStage };
+      if (sounds?.length) writeSounds(ctx.out, sounds, fps, titleFrames(spec, fps));
     }
     return {
       path: ctx.out,
@@ -248,16 +273,38 @@ export async function record(eng, spec, ctx) {
   }
 }
 
+/**
+ * How the stage draws a take's words, from the project's `stage` config: the
+ * faces, the accent, and the logo the title cards carry.
+ * @param {Record<string, any>} spec
+ */
+async function stageWords(spec) {
+  const logo = STAGE_STYLE.logo
+    ? `data:image/${extname(STAGE_STYLE.logo).slice(1).replace("jpg", "jpeg").replace("svg", "svg+xml")};base64,` +
+      (await readFile(STAGE_STYLE.logo)).toString("base64")
+    : undefined;
+  return {
+    ...(STAGE_STYLE.fonts ? { fonts: STAGE_STYLE.fonts } : {}),
+    ...(STAGE_STYLE.titleFont ? { titleFont: STAGE_STYLE.titleFont } : {}),
+    ...(STAGE_STYLE.titleStyle ? { titleStyle: STAGE_STYLE.titleStyle } : {}),
+    ...(STAGE_STYLE.textFont ? { textFont: STAGE_STYLE.textFont } : {}),
+    ...(STAGE_STYLE.accent ? { accent: STAGE_STYLE.accent } : {}),
+    ...(logo ? { logo } : {}),
+    at: spec.captionAt === "top" ? "top" : "bottom",
+  };
+}
+
 /** Degrees a staged take swings across its length unless `--drift` says otherwise. */
 export const STAGE_DRIFT = 10;
 
 /** The take: lead-in, the actions, and whatever the tail catches. */
-async function drive(page, spec, cursor, timing) {
+async function drive(page, spec, cursor, timing, log) {
   await sleep(timing.leadInMs);
   return runActions(page, spec.do ?? [], {
     baseUrl: spec.baseUrl,
     timeout: spec.actionTimeout,
     cursor,
+    log,
   });
 }
 
@@ -337,6 +384,7 @@ export function makeCursor(page, opts) {
    * frame of the press cannot wait for that.
    */
   async function press() {
+    opts.sounds?.push({ beat: opts.beat(), kind: "click" });
     await page.evaluate(() => window.__shotkit?.press(true)).catch(() => {});
     await page.mouse.down();
     await sleep(timing.pressMs);
@@ -359,6 +407,21 @@ export function makeCursor(page, opts) {
 
   return {
     typeDelay: timing.typeDelayMs,
+
+    /**
+     * Type `text` with `type`, noting the span it went in over for a sound pass.
+     * @param {(text: string) => Promise<void>} type
+     */
+    async typing(text, type) {
+      const beat = opts.beat();
+      await type(text);
+      opts.sounds?.push({ beat, end: opts.beat(), kind: "type", chars: [...text].length });
+    },
+
+    /** A key pressed on its own, like Enter, for a sound pass. */
+    key(name) {
+      opts.sounds?.push({ beat: opts.beat(), kind: "key", key: name });
+    },
 
     async glide(locator, o = {}) {
       const p = await pointOf(locator, o);
@@ -412,6 +475,13 @@ export function makeCursor(page, opts) {
 
     /** Put a lower-third caption up, or take it down with an empty one. */
     async caption(text) {
+      // On a stage the caption belongs to the stage, not the page: it is noted
+      // against the beat it starts on and drawn flat over the tilted window
+      // when the take is staged.
+      if (opts.captions) {
+        opts.captions.push({ beat: opts.beat(), text: String(text ?? "") });
+        return;
+      }
       await page.evaluate((t) => window.__shotkit?.caption(t), text).catch(() => {});
     },
 

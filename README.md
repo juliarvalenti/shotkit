@@ -95,7 +95,7 @@ speedup: 13.1x
 | `shot warm` / `status` / `stop` / `serve` | the daemon |
 | `shot doctor` / `bench` | check and time this machine |
 
-`--backdrop` takes `mycelial` (a generated network — see **The desktop**),
+`--backdrop` takes `glass` or `mycelial` (the docs site's two scenes — see **The desktop**),
 `mycelium`, `dusk`, `ink`, `paper`, `none`, or any CSS.
 
 `shot help <command>` lists every flag. stdout carries the path and nothing
@@ -285,6 +285,30 @@ right, z is the dutch angle. One number is a dutch tilt on its own. Any
 | `--backdrop` | the ground, as everywhere else; unset, the stage uses its own near-black (or near-white with `--theme light`) |
 | `--drift <deg>` | video only: swing the angle this far across the take, with a slow push in (default 10, `0` holds still) |
 
+On a staged take the words belong to the stage, not the page. A `caption:`
+is drawn flat over the tilted window, a headline and, after a `|`, the line
+under it (`caption:Hand it a task|Every task is a row and a thread.`), and
+`--intro` / `--outro` open and close the take on a title card in the same form,
+with the project's logo above it. The faces, the accent and the logo come from
+`stage` in `shotkit.config.json`:
+
+```json
+"stage": {
+  "fonts": "https://fonts.googleapis.com/css2?family=…",
+  "titleFont": "\"Cormorant Garamond\", Georgia, serif",
+  "titleStyle": "italic 600",
+  "textFont": "\"IBM Plex Sans\", system-ui, sans-serif",
+  "accent": "#5dd4e0",
+  "logo": "docs/logo.png"
+}
+```
+
+| | |
+|---|---|
+| `--intro <title\|line>` / `--outro` | a title card before or after the take, cross-faded into the window |
+| `--title-seconds <s>` | how long each card holds (default 2.6) |
+| `--caption-at top` | captions top-left rather than bottom-left; the window shifts to make room |
+
 A still is re-rendered once, the way `--chrome` is: the browser does the 3D,
 so the type stays sharp instead of being resampled. A video is recorded as
 usual to a spool on disk, then each frame is put on the stage and encoded
@@ -322,6 +346,16 @@ after which a framed shot costs what any other does. It grows from a fixed seed,
 so the same command gives the same background tomorrow and a committed asset
 does not churn on every re-render; `--backdrop-seed <n>` asks for a different
 one.
+
+`--backdrop glass` is the docs site's other scene: droplets of iridescent
+glass drifting up, reaching for each other with hyphae, now and then pooling
+into one. It is the project's script too (`backdrop.glass`; in mycelium,
+`docs/glass.js`, the file the docs load), run in WebGL with `Math.random`
+seeded. A still gets one frame. A staged video gets the scene live under the
+window, stepped one frame of the take at a time through the script's
+`__glassManual` seam, so every page the take is staged on holds the same scene
+at the same beat; it is drawn at half resolution and re-drawn at 15fps, since
+a software GL spends most of a frame on it and the drops drift slowly.
 
 The other backdrops (`mycelium`, `dusk`, `ink`, `paper`, `none`, or any CSS you
 pass) are unchanged, and are what to reach for when a shot wants quiet behind
@@ -368,6 +402,9 @@ lot when you want the frame exactly as it loads.
   skew between the driver and the host's browser is not a re-download.
 - **Editing shotkit restarts the daemon.** It stamps its own source at boot and
   the client replaces it when that moves, so a fix never silently runs stale.
+- **Behind an egress proxy**, Chromium reads no `HTTPS_PROXY`; set
+  `SHOTKIT_PROXY` to the proxy's URL and the browser uses it (loopback still
+  goes direct). The proxy's CA has to be trusted by Chromium's NSS store.
 - **Captures land in `.shotkit/`** (gitignored) and overwrite by name; `--unique`
   timestamps instead.
 - **A take costs about what it lasts.** Encoding keeps up with capture, so a

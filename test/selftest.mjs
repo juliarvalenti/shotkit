@@ -343,6 +343,7 @@ function fakePage(present) {
     locator: (sel) => mk("css", sel),
     getByRole: (role, o) => mk("role", o.name),
     getByText: (t) => mk("text", t),
+    getByPlaceholder: (t) => mk("placeholder", t),
   };
 }
 

@@ -22,6 +22,7 @@ import { codeDocument } from "./code.mjs";
 import { terminalDocument } from "./terminal.mjs";
 import { cardDocument, imageCardDocument } from "./card.mjs";
 import { sheetDocument } from "./sheet.mjs";
+import { GLASS_VIDEO_SCALE, glassArt, glassMarkup, glassSource } from "./glass.mjs";
 import { mycelialArt } from "./mycelial.mjs";
 import { resolveBaseUrl } from "./app.mjs";
 import { runCommand } from "./run.mjs";
@@ -54,7 +55,7 @@ import { STAGE_DEFAULTS, isStaged, pickStage, stageDocument } from "./stage.mjs"
  * @property {string} [address] address-bar text when `chrome` is set
  * @property {"dark"|"light"} [chromeTheme] frame theme, when it should differ
  *   from the app's — a light frame around a dark app, say
- * @property {number} [backdropSeed] which network `--backdrop mycelial` grows
+ * @property {number} [backdropSeed] which scene `--backdrop glass|mycelial` grows
  * @property {number} [fps] `op: "video"` — frames per second (default 30)
  * @property {number} [zoom] push-in factor for `zoom:` and `--auto-zoom`
  * @property {boolean} [autoZoom] push in on every click, and back out after
@@ -103,7 +104,7 @@ const pickCard = (spec) => Object.fromEntries(CARD_KEYS.filter((k) => spec[k] !=
 /**
  * The artwork layer behind the card, for the backdrops that have one.
  *
- * Only `mycelial` does. It is a backdrop rather than a flag of its own because
+ * `mycelial` and `glass` do. Each is a backdrop rather than a flag of its own because
  * that is where a caller looks for what the image sits on, but growing the
  * network is a render and not a CSS lookup, so it resolves here — where the
  * engine is — instead of in the string table.
@@ -112,8 +113,20 @@ const pickCard = (spec) => Object.fromEntries(CARD_KEYS.filter((k) => spec[k] !=
  * @returns {Promise<string|undefined>}
  */
 async function artFor(eng, spec, theme) {
+  const t = theme === "light" ? "light" : "dark";
+  if (spec.backdrop === "glass") return glassArt(eng, { theme: t, seed: spec.backdropSeed });
   if (spec.backdrop !== "mycelial") return undefined;
-  return mycelialArt(eng, { theme: theme === "light" ? "light" : "dark", seed: spec.backdropSeed });
+  return mycelialArt(eng, { theme: t, seed: spec.backdropSeed });
+}
+
+/** The glass scene as live markup for a staged take, which moves under the window. */
+async function glassLive(spec) {
+  const { script } = await glassSource();
+  return glassMarkup(script, {
+    theme: spec.theme === "light" ? "light" : "dark",
+    seed: spec.backdropSeed,
+    scale: GLASS_VIDEO_SCALE,
+  });
 }
 
 const pickStatic = (spec) => ({
@@ -171,7 +184,12 @@ export async function capture(spec, ctx = {}) {
         settle: spec.settle ?? (isApp ? "fast" : "none"),
         storage: themedStorage(spec, isApp),
       },
-      { log, out, stageArt: isStaged(spec) ? await artFor(eng, spec, spec.theme ?? "dark") : undefined },
+      {
+        log,
+        out,
+        stageArt: isStaged(spec) && spec.backdrop !== "glass" ? await artFor(eng, spec, spec.theme ?? "dark") : undefined,
+        stageLive: isStaged(spec) && spec.backdrop === "glass" ? await glassLive(spec) : undefined,
+      },
     );
     // Everything about *how* the take was made is meta; the file and its shape
     // stay at the top level, where every other op puts them.

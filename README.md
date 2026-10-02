@@ -30,6 +30,16 @@ shot doctor
 Node 20.6 or newer. Playwright downloads its browser on first use if no
 Chromium is on disk; `shot doctor` says what it found.
 
+### The Claude Code skill
+
+`skills/shotkit/SKILL.md` teaches a coding agent to use `shot`. Link it into
+your personal skills so it is available in every project, and stays current
+with `git pull`:
+
+```bash
+ln -s ~/Documents/GitHub/shotkit/skills/shotkit ~/.claude/skills/shotkit
+```
+
 ## The project
 
 shotkit works on the project you run it from: the git top-level of the

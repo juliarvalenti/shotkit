@@ -158,7 +158,7 @@ const SESSION = {
 
 const APP = {
   "base-url": { type: "string", value: "<url>", help: "app origin (default: probe :3000-:3002)" },
-  mock: { type: "boolean", help: "boot pnpm dev:mock and keep it warm in the daemon" },
+  mock: { type: "boolean", help: "boot the project's mock dev script (dev:mock) and keep it warm in the daemon" },
 };
 
 // A take has no still-image business: nothing is clipped to an element, masked,
@@ -171,7 +171,7 @@ const err = (m) => process.stderr.write(`${m}\n`);
 const USAGE = `shot — fast screenshots of the app and of CLI output
 
 one-shot
-  shot app [route]        the running frontend (add --mock to boot dev:mock)
+  shot app [route]        the running frontend (add --mock to boot its dev:mock script)
   shot url <url>          any URL
   shot term <command…>    run a command, shoot its terminal output
   shot text <file|->      render an existing text/ANSI capture as a terminal
@@ -186,8 +186,8 @@ responsive
   shot app / --viewports phone,wide   just these two
 
 navigation — a page held open, driven step by step
-  shot open /room/checkout --session r   open it and keep it
-  shot do click:Negotiate --session r act on it
+  shot open /settings --session r     open it and keep it
+  shot do click:Save --session r      act on it
   shot shoot --session r              shoot it as it stands
   shot sessions | shot close --session r
 
@@ -196,7 +196,7 @@ daemon
   shot doctor | bench
 
 stdout carries the path and nothing else, so it composes:
-  open "$(shot app /room/checkout --mock)"
+  open "$(shot app /settings --mock)"
 ` + `
 actions (--do, and the arguments to \`shot do\` / \`shot shoot\`)${ACTION_HELP}
 `;
@@ -413,7 +413,7 @@ async function main() {
 
   let spec;
   if (command === "term") {
-    if (rest.length === 0) throw new Error("shot term needs a command: shot term mycelium --help");
+    if (rest.length === 0) throw new Error("shot term needs a command: shot term git --help");
     spec = toSpec("term", flags);
     spec.argv = rest;
   } else if (command === "open") {

@@ -16,7 +16,8 @@
 
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
-import { Engine, REPO_ROOT, pngSize, writeShot } from "./engine.mjs";
+import { Engine, pngSize, writeShot } from "./engine.mjs";
+import { PROJECT_ROOT } from "./project.mjs";
 import { codeDocument } from "./code.mjs";
 import { terminalDocument } from "./terminal.mjs";
 import { cardDocument, imageCardDocument } from "./card.mjs";
@@ -33,7 +34,7 @@ import { record, resolveFormat } from "./video.mjs";
  * @property {string} [url] for `op: "url"`
  * @property {string} [route] for `op: "app"`
  * @property {string} [baseUrl] app origin; probed when absent
- * @property {boolean} [mock] boot `pnpm dev:mock` and hold it in the daemon
+ * @property {boolean} [mock] boot the project's mock script and hold it in the daemon
  * @property {number} [width] @property {number} [height] @property {number} [scale]
  * @property {string} [viewport] preset name or `1280x800@2`
  * @property {string} [viewports] comma-separated presets — one shot each
@@ -58,7 +59,7 @@ import { record, resolveFormat } from "./video.mjs";
  * @property {boolean} [autoZoom] push in on every click, and back out after
  */
 
-export const DEFAULT_OUT_DIR = process.env.SHOTKIT_OUT ?? resolve(REPO_ROOT, ".shotkit");
+export const DEFAULT_OUT_DIR = process.env.SHOTKIT_OUT ?? resolve(PROJECT_ROOT, ".shotkit");
 
 const slug = (s) =>
   (s || "shot").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "shot";

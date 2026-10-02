@@ -24,7 +24,7 @@ import { cardDocument } from "../src/card.mjs";
 import { encodeArgs, findEncoder, forgetEncoder, jpegSize, startEncoder } from "../src/encode.mjs";
 import { parseZoom } from "../src/video.mjs";
 import { startPump } from "../src/pump.mjs";
-import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Engine, frameOf, requireStorageState, storageStateKey } from "../src/engine.mjs";
@@ -388,13 +388,15 @@ function fakeEncoder(overrides = {}) {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/** A program that runs and exits non-zero: `/bin/false` on Linux, `/usr/bin/false` on macOS. */
+const FALSE_BIN = existsSync("/bin/false") ? "/bin/false" : "/usr/bin/false";
 
 await (async () => {
   await atest("a dead ffmpeg is reported, not waited on forever", async () => {
     // The exit listener is registered immediately on spawn: a process that
     // dies on its arguments emits `close` once before `finish()` would be
     // called, so a listener set inside `finish()` would miss it.
-    const enc = startEncoder({ format: "webm", fps: 30, width: 64, height: 64, out: "/tmp/shotkit-dead.webm", ffmpeg: "/bin/false" });
+    const enc = startEncoder({ format: "webm", fps: 30, width: 64, height: 64, out: "/tmp/shotkit-dead.webm", ffmpeg: FALSE_BIN });
     await wait(200);
     for (let i = 0; i < 3; i++) enc.write(FRAME);
     const outcome = await Promise.race([

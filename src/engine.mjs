@@ -27,19 +27,23 @@ import { fileURLToPath } from "node:url";
 import { launchChromium } from "./browser.mjs";
 import { runActions } from "./actions.mjs";
 import { policyArgs, policyKey } from "./network.mjs";
+import { APP_DIR, PROJECT_ROOT } from "./project.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const SHOTKIT_ROOT = resolve(HERE, "..");
-export const REPO_ROOT = resolve(SHOTKIT_ROOT, "..");
 
 /**
- * Playwright is resolved rather than plainly imported: a checkout that has run
- * `pnpm install` in mycelium-frontend already has a matching copy, and borrowing
- * it means `shotkit/` needs no install of its own.
+ * Playwright is resolved rather than plainly imported: shotkit's own install
+ * comes first, and a project that already has a copy (its frontend's
+ * node_modules) can lend it, so a fresh clone still shoots before `npm install`.
  */
 export async function loadPlaywright() {
   const require_ = createRequire(import.meta.url);
-  const candidates = ["playwright", resolve(REPO_ROOT, "mycelium-frontend/node_modules/playwright/index.js")];
+  const candidates = [
+    "playwright",
+    resolve(APP_DIR, "node_modules/playwright/index.js"),
+    resolve(PROJECT_ROOT, "node_modules/playwright/index.js"),
+  ];
   for (const spec of candidates) {
     try {
       const path = spec.startsWith("/") ? spec : require_.resolve(spec);
@@ -51,7 +55,7 @@ export async function loadPlaywright() {
       // try the next candidate
     }
   }
-  throw new Error("playwright not found. Run `npm install` in shotkit/, or `pnpm install` in mycelium-frontend/.");
+  throw new Error(`playwright not found. Run \`npm install\` in ${SHOTKIT_ROOT}.`);
 }
 
 /** Width/height straight out of the PNG IHDR — cheaper than decoding. */
@@ -386,6 +390,10 @@ async function shootPage(page, opts) {
  *
  * Each step is best-effort: this also runs against a real backend, where a rail
  * may legitimately stay empty, and an empty rail is not a reason to fail a shot.
+ *
+ * The hooks are optional. An app with no `data-app-shell` attribute anywhere is
+ * given a moment to mount one and then not waited on, so a project that never
+ * adopted them pays about a second, not the whole shell budget.
  */
 const SETTLE_BUDGET = {
   fast: { shell: 15_000, skeleton: 4_000, connection: 6_000 },
@@ -396,7 +404,12 @@ async function settle(page, level) {
   const soft = (p) => p.catch(() => {});
   const budget = SETTLE_BUDGET[level] ?? SETTLE_BUDGET.fast;
 
-  await soft(page.waitForSelector('[data-app-shell="ready"]', { state: "visible", timeout: budget.shell }));
+  const hasShell = await page
+    .waitForSelector("[data-app-shell]", { state: "attached", timeout: 1_000 })
+    .then(() => true, () => false);
+  if (hasShell) {
+    await soft(page.waitForSelector('[data-app-shell="ready"]', { state: "visible", timeout: budget.shell }));
+  }
   await soft(
     page.waitForFunction(() => document.querySelectorAll(".animate-pulse").length === 0, null, {
       timeout: budget.skeleton,

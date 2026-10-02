@@ -13,8 +13,9 @@ import { existsSync } from "node:fs";
 import { platform, release } from "node:os";
 import { DEFAULT_OUT_DIR } from "./api.mjs";
 import { FRONTEND_DIR } from "./app.mjs";
-import { loadPlaywright, REPO_ROOT } from "./engine.mjs";
+import { loadPlaywright } from "./engine.mjs";
 import { CANVAS_SOURCE } from "./mycelial.mjs";
+import { CONFIG_FILE, MOCK_SCRIPT, PROJECT_ROOT } from "./project.mjs";
 import { candidates, launchChromium } from "./browser.mjs";
 import { ptyAvailable } from "./run.mjs";
 import { ping, socketPath } from "./ipc.mjs";
@@ -81,7 +82,9 @@ async function probeWebfonts(pw) {
 export async function doctor() {
   head("host");
   ok(`node ${process.version} on ${platform()} ${release()}`);
-  ok(`repo ${REPO_ROOT}`);
+  ok(`project ${PROJECT_ROOT}`);
+  if (existsSync(CONFIG_FILE)) ok(`config ${CONFIG_FILE}`);
+  else ok("no shotkit.config.json — defaults apply");
   ok(`output ${DEFAULT_OUT_DIR}`);
 
   head("browser");
@@ -126,15 +129,16 @@ export async function doctor() {
   }
 
   head("backdrop");
-  if (existsSync(`${REPO_ROOT}/${CANVAS_SOURCE}`)) ok(`${CANVAS_SOURCE} present — \`--backdrop mycelial\` grows the site's network`);
+  if (!CANVAS_SOURCE) ok("no backdrop.canvas configured — `--backdrop mycelial` is off; the other presets work");
+  else if (existsSync(CANVAS_SOURCE)) ok(`${CANVAS_SOURCE} present — \`--backdrop mycelial\` grows its network`);
   else warn(`${CANVAS_SOURCE} missing — \`--backdrop mycelial\` errors; the other presets are unaffected`);
 
   head("webfonts");
   await probeWebfonts(pw);
 
   head("app");
-  if (existsSync(`${FRONTEND_DIR}/node_modules`)) ok("mycelium-frontend deps installed — --mock can boot dev:mock");
-  else warn("mycelium-frontend/node_modules missing — run `pnpm install` there before --mock");
+  if (existsSync(`${FRONTEND_DIR}/node_modules`)) ok(`${FRONTEND_DIR} has deps installed — --mock can run ${MOCK_SCRIPT}`);
+  else warn(`${FRONTEND_DIR}/node_modules missing — install the app's deps before --mock`);
   for (const port of [3000, 3001, 3002]) {
     try {
       const res = await fetch(`http://localhost:${port}/`, { redirect: "manual", signal: AbortSignal.timeout(600) });

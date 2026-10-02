@@ -19,7 +19,7 @@ import { policyArgs, policyKey } from "../src/network.mjs";
 import { resolveViewport, viewportList } from "../src/viewports.mjs";
 import { locate, parseAction } from "../src/actions.mjs";
 import { backdrop, palette } from "../src/theme.mjs";
-import { CANVAS_VARS, VEIL, networkDocument } from "../src/mycelial.mjs";
+import { CANVAS_VARS, VEIL, canvasDocument } from "../src/canvas.mjs";
 import { cardDocument } from "../src/card.mjs";
 import { encodeArgs, findEncoder, forgetEncoder, jpegSize, startEncoder } from "../src/encode.mjs";
 import { parseZoom } from "../src/video.mjs";
@@ -243,23 +243,24 @@ test("a jpeg's size comes out of its frame header", () => {
 });
 
 test("a backdrop preset resolves per theme, and unknown values pass through", () => {
-  assert.equal(backdrop("mycelial", "dark"), CANVAS_VARS.dark.bg);
-  assert.equal(backdrop("mycelial", "light"), CANVAS_VARS.light.bg);
+  assert.equal(backdrop("canvas", "dark"), CANVAS_VARS.dark.bg);
+  assert.equal(backdrop("canvas", "light"), CANVAS_VARS.light.bg);
   assert.equal(backdrop("#123456", "dark"), "#123456");
 });
 
-test("the network harness carries the theme's canvas vars", () => {
-  const html = networkDocument("/* algorithm */", { theme: "light" });
+test("the canvas harness carries the theme's canvas vars", () => {
+  const html = canvasDocument("/* script */", { theme: "light" });
   assert.ok(html.includes(`--canvas-ink:${CANVAS_VARS.light.ink}`));
   assert.ok(html.includes(`--canvas-alpha:${CANVAS_VARS.light.alpha}`));
-  assert.ok(html.includes('id="mycelium-bg"'), "the algorithm looks the canvas up by id");
+  assert.ok(html.includes('<html class="light">'), "a script reads the theme off <html>");
+  assert.ok(html.includes('id="mycelium-bg"'), "the script looks the canvas up by id");
 });
 
-test("one seed grows one network", () => {
-  const a = networkDocument("/* algorithm */", { seed: 7 });
-  assert.ok(a.includes("var s=7;"), "the seed replaces Math.random before the algorithm runs");
-  assert.notEqual(a, networkDocument("/* algorithm */", { seed: 8 }));
-  assert.equal(a, networkDocument("/* algorithm */", { seed: 7 }));
+test("one seed paints one scene", () => {
+  const a = canvasDocument("/* script */", { seed: 7 });
+  assert.ok(a.includes("var s=7;"), "the seed replaces Math.random before the script runs");
+  assert.notEqual(a, canvasDocument("/* script */", { seed: 8 }));
+  assert.equal(a, canvasDocument("/* script */", { seed: 7 }));
 });
 
 test("--tilt reads a preset, three angles, or one dutch angle", () => {
@@ -320,9 +321,9 @@ test("the vignette veils light less than dark", () => {
 
 test("a card grows an artwork layer only when there is artwork", () => {
   assert.ok(!cardDocument("hi", { backdrop: "ink" }).includes('id="art"'));
-  const art = cardDocument("hi", { backdrop: "mycelial", art: "url(data:image/png;base64,AA) center/cover" });
+  const art = cardDocument("hi", { backdrop: "canvas", art: "url(data:image/png;base64,AA) center/cover" });
   assert.ok(art.includes('id="art"'));
-  assert.ok(art.includes("image-rendering:pixelated"), "the cells must not blur when upscaled");
+  assert.ok(art.includes("image-rendering:auto"), "a canvas upscales smooth unless the project says pixelated");
 });
 
 /**

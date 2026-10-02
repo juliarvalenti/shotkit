@@ -12,7 +12,7 @@
  *
  * A project can describe itself in `shotkit.config.json` at its root. Every
  * field is optional; with no file at all, `--mock` runs the `dev:mock` script
- * in the project root and `--backdrop mycelial` is unavailable.
+ * in the project root and `--backdrop canvas` is unavailable.
  *
  *   {
  *     "app": {
@@ -22,7 +22,11 @@
  *       "mockHeader": "x-mock",             // response header proving a server is the mock one
  *       "mockProbe": "/api/health"          // a route that carries it (default "/")
  *     },
- *     "backdrop": { "canvas": "scripts/canvas.js" }  // source for --backdrop mycelial
+ *     "backdrop": {
+ *       "canvas": "scripts/canvas.js",      // script that paints --backdrop canvas
+ *       "size": "1920x1080",                // the page it paints on (default 1920x1080)
+ *       "pixelated": false                  // upscale hard-edged, for pixel art (default false)
+ *     }
  *   }
  */
 
@@ -73,3 +77,14 @@ export const MOCK_HEADER = config.app?.mockHeader ?? null;
 export const MOCK_PROBE = config.app?.mockProbe ?? "/";
 /** @type {string | null} absolute path, or null when the project names none */
 export const CANVAS_PATH = config.backdrop?.canvas ? resolve(PROJECT_ROOT, config.backdrop.canvas) : null;
+export const CANVAS_PIXELATED = config.backdrop?.pixelated === true;
+
+function canvasSize(value) {
+  if (value === undefined) return { width: 1920, height: 1080 };
+  const m = /^(\d+)x(\d+)$/.exec(String(value).trim());
+  if (!m) throw new Error(`${CONFIG_FILE}: backdrop.size takes WxH, like 1920x1080, not "${value}"`);
+  return { width: Number(m[1]), height: Number(m[2]) };
+}
+
+/** The page the canvas script paints on, in CSS px; scripts often scale their scene to it. */
+export const CANVAS_SIZE = canvasSize(config.backdrop?.size);

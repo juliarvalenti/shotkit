@@ -22,7 +22,7 @@ import { codeDocument } from "./code.mjs";
 import { terminalDocument } from "./terminal.mjs";
 import { cardDocument, imageCardDocument } from "./card.mjs";
 import { sheetDocument } from "./sheet.mjs";
-import { mycelialArt } from "./mycelial.mjs";
+import { canvasArt } from "./canvas.mjs";
 import { resolveBaseUrl } from "./app.mjs";
 import { runCommand } from "./run.mjs";
 import { stripAnsi } from "./ansi.mjs";
@@ -54,7 +54,7 @@ import { STAGE_DEFAULTS, isStaged, pickStage, stageDocument } from "./stage.mjs"
  * @property {string} [address] address-bar text when `chrome` is set
  * @property {"dark"|"light"} [chromeTheme] frame theme, when it should differ
  *   from the app's — a light frame around a dark app, say
- * @property {number} [backdropSeed] which network `--backdrop mycelial` grows
+ * @property {number} [backdropSeed] which scene `--backdrop canvas` paints
  * @property {number} [fps] `op: "video"` — frames per second (default 30)
  * @property {number} [zoom] push-in factor for `zoom:` and `--auto-zoom`
  * @property {boolean} [autoZoom] push in on every click, and back out after
@@ -103,17 +103,17 @@ const pickCard = (spec) => Object.fromEntries(CARD_KEYS.filter((k) => spec[k] !=
 /**
  * The artwork layer behind the card, for the backdrops that have one.
  *
- * Only `mycelial` does. It is a backdrop rather than a flag of its own because
- * that is where a caller looks for what the image sits on, but growing the
- * network is a render and not a CSS lookup, so it resolves here — where the
- * engine is — instead of in the string table.
+ * Only `canvas` does. It is a backdrop rather than a flag of its own because
+ * that is where a caller looks for what the image sits on, but painting the
+ * project's canvas is a render and not a CSS lookup, so it resolves here —
+ * where the engine is — instead of in the string table.
  *
  * @param {any} eng @param {Record<string,any>} spec @param {string} theme
  * @returns {Promise<string|undefined>}
  */
 async function artFor(eng, spec, theme) {
-  if (spec.backdrop !== "mycelial") return undefined;
-  return mycelialArt(eng, { theme: theme === "light" ? "light" : "dark", seed: spec.backdropSeed });
+  if (spec.backdrop !== "canvas") return undefined;
+  return canvasArt(eng, { theme: theme === "light" ? "light" : "dark", seed: spec.backdropSeed });
 }
 
 const pickStatic = (spec) => ({

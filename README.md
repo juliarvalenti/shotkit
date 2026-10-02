@@ -49,7 +49,7 @@ is optional:
     "mockHeader": "x-mock",
     "mockProbe": "/api/health"
   },
-  "backdrop": { "canvas": "scripts/canvas.js" }
+  "backdrop": { "canvas": "scripts/canvas.js", "size": "1920x1080", "pixelated": false }
 }
 ```
 
@@ -59,7 +59,9 @@ is optional:
 | `app.mockScript` | the package.json script `--mock` runs (default `dev:mock`) |
 | `app.mockEnv` | extra environment for that script |
 | `app.mockHeader` / `app.mockProbe` | a response header (value `1`) on a route that proves a running dev server is the mock one; without it, any running dev server is attached to |
-| `backdrop.canvas` | a canvas script for `--backdrop mycelial` (see **The desktop**) |
+| `backdrop.canvas` | a canvas script for `--backdrop canvas` (see **The desktop**) |
+| `backdrop.size` | the page the script paints on, `WxH` in CSS px (default `1920x1080`) |
+| `backdrop.pixelated` | upscale the painting hard-edged, for pixel art (default `false`, smooth) |
 
 ## Why it is fast
 
@@ -95,7 +97,7 @@ speedup: 13.1x
 | `shot warm` / `status` / `stop` / `serve` | the daemon |
 | `shot doctor` / `bench` | check and time this machine |
 
-`--backdrop` takes `mycelial` (a generated network — see **The desktop**),
+`--backdrop` takes `canvas` (the project's own background — see **The desktop**),
 `mycelium`, `dusk`, `ink`, `paper`, `none`, or any CSS.
 
 `shot help <command>` lists every flag. stdout carries the path and nothing
@@ -294,38 +296,48 @@ it. That pass costs about 25ms a frame spread over four pages; with
 
 ## The desktop
 
-`--backdrop mycelial` puts a generated hypha network behind the window, so a
-framed screenshot sits on a textured desktop rather than a gradient:
+`--backdrop canvas` puts the project's own background behind the window (the
+animated scene a docs site paints behind its pages, say), so a framed
+screenshot sits on the product's desktop rather than a gradient:
 
 ```bash
-shot app /settings --chrome --backdrop mycelial --padding 90
-shot term --backdrop mycelial -- git log --oneline -8
+shot app /settings --chrome --backdrop canvas --padding 90
+shot term --backdrop canvas -- git log --oneline -8
+shot app / --demo --backdrop canvas
 ```
 
-It needs the canvas algorithm, which shotkit does not carry: the project names
-a script in `shotkit.config.json` (`backdrop.canvas`). In mycelium that is
-`scripts/banner-assets/mycelial-canvas.js`, the same copy the mycelium docs
-site runs. The script is an IIFE that draws into `<canvas id="mycelium-bg">`
-reading `--canvas-bg`, `--canvas-ink` and `--canvas-alpha` from the root, and
-the colors are cream and quiet in light, near-black and teal in dark. Without a
-configured script this backdrop errors and the others are unaffected.
+shotkit carries no painting of its own: the project names a script in
+`shotkit.config.json` (`backdrop.canvas`). The script is an IIFE that draws
+into `<canvas id="mycelium-bg">`. It can read the `dark` or `light` class on
+`<html>` and the `--canvas-bg`, `--canvas-ink` and `--canvas-alpha` custom
+properties, and it should paint one still frame under
+`prefers-reduced-motion`, which every shotkit page sets. 2D canvas and WebGL
+both work. It paints on a `backdrop.size` page (1920x1080 by default; many
+scenes scale to the page, so this is also their density), and the result is
+upscaled smoothly, or hard-edged with `backdrop.pixelated` for pixel art.
+Without a configured script this backdrop errors and the others are
+unaffected.
+
+In mycelium, the docs site's glass droplets are the IIFE under "Glass
+droplets" in `docs/site.js`, and the older pixel hypha network is
+`scripts/banner-assets/mycelial-canvas.js` (with `"pixelated": true` and
+`"size": "1600x900"`, the density it was tuned at).
 
 A vignette in the ground's own color veils it, lightly in the middle and
-heavily at the edges. A site can run the network at full strength because
+heavily at the edges. A site can run its background at full strength because
 prose sits on near-solid paper above it; a screenshot has no such pane, and an
-unveiled network pulls the eye into the corners and away from the window. Light
-is veiled less than dark, since light already runs at a lower alpha.
+unveiled background pulls the eye into the corners and away from the window.
+Light is veiled less than dark, since light already runs at a lower alpha.
 
-One network is grown per theme and held for the life of the daemon, so a run of
-shots shares one desktop and only the first pays to grow it — about 150ms once,
-after which a framed shot costs what any other does. It grows from a fixed seed,
-so the same command gives the same background tomorrow and a committed asset
-does not churn on every re-render; `--backdrop-seed <n>` asks for a different
-one.
+One painting is made per theme and held for the life of the daemon, so a run
+of shots shares one desktop and only the first pays to paint it. It is painted
+from a fixed seed (shotkit replaces `Math.random`), so the same command gives
+the same background tomorrow and a committed asset does not churn on every
+re-render; `--backdrop-seed <n>` asks for a different one.
 
 The other backdrops (`mycelium`, `dusk`, `ink`, `paper`, `none`, or any CSS you
 pass) are unchanged, and are what to reach for when a shot wants quiet behind
-it: the network is texture, and texture competes with a busy screen.
+it: a painted background is texture, and texture competes with a busy screen.
 
 ## The library
 

@@ -14,7 +14,7 @@ import { platform, release } from "node:os";
 import { DEFAULT_OUT_DIR } from "./api.mjs";
 import { FRONTEND_DIR } from "./app.mjs";
 import { loadPlaywright } from "./engine.mjs";
-import { CANVAS_SOURCE } from "./mycelial.mjs";
+import { ART_RENDERING, CANVAS_SOURCE } from "./canvas.mjs";
 import { CONFIG_FILE, MOCK_SCRIPT, PROJECT_ROOT } from "./project.mjs";
 import { candidates, launchChromium } from "./browser.mjs";
 import { ptyAvailable } from "./run.mjs";
@@ -129,9 +129,9 @@ export async function doctor() {
   }
 
   head("backdrop");
-  if (!CANVAS_SOURCE) ok("no backdrop.canvas configured — `--backdrop mycelial` is off; the other presets work");
-  else if (existsSync(CANVAS_SOURCE)) ok(`${CANVAS_SOURCE} present — \`--backdrop mycelial\` grows its network`);
-  else warn(`${CANVAS_SOURCE} missing — \`--backdrop mycelial\` errors; the other presets are unaffected`);
+  if (!CANVAS_SOURCE) ok("no backdrop.canvas configured — `--backdrop canvas` is off; the other presets work");
+  else if (existsSync(CANVAS_SOURCE)) ok(`${CANVAS_SOURCE} present — \`--backdrop canvas\` paints it (${ART_RENDERING === "pixelated" ? "pixelated" : "smooth"})`);
+  else warn(`${CANVAS_SOURCE} missing — \`--backdrop canvas\` errors; the other presets are unaffected`);
 
   head("webfonts");
   await probeWebfonts(pw);

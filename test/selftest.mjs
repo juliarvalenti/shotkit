@@ -26,6 +26,12 @@ import { parseZoom } from "../src/video.mjs";
 import { startPump } from "../src/pump.mjs";
 import { TILT_PRESETS, driftAt, isStaged, parseStageSize, parseTilt, stageDocument } from "../src/stage.mjs";
 import { startSpool } from "../src/restage.mjs";
+import { rng } from "../src/audio/dsp.mjs";
+import { limit, lufs, samplePeakDb, truePeakDb } from "../src/audio/master.mjs";
+import { readCues, writeCues } from "../src/audio/cues.mjs";
+import { renderFoley } from "../src/audio/foley.mjs";
+import { encodeWav, soundFfmpeg } from "../src/audio/io.mjs";
+import { mixSoundtrack, soundOptions } from "../src/audio/soundtrack.mjs";
 import { existsSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -586,7 +592,147 @@ await (async () => {
     assert.equal(enc.finished, 1);
     assert.equal(enc.killed, 0);
   });
+
+  await atest("a moment is placed on the first frame that shows it, not the one being written", async () => {
+    // Frames drawn 300ms before they reach the pump, as a slow screencast does.
+    const source = { mode: "screencast", latest: FRAME, latestAt: 0, stop: async () => {} };
+    const lag = setInterval(() => (source.latestAt = Date.now() - 300), 5);
+    const pump = startPump({ source, fps: 50, maxFrames: 1000, encoder: () => fakeEncoder() });
+    try {
+      await wait(400);
+      const moment = Date.now();
+      const writtenThen = pump.frames;
+      await wait(600);
+      // The frame showing `moment` reaches the pump 300ms later, so it lands
+      // ~15 frames (at 50fps) after the one that was being written at the time.
+      const placed = pump.frameAt(moment);
+      assert.ok(placed - writtenThen >= 10, `placed at ${placed}, written then ${writtenThen}`);
+      assert.equal(pump.frameAt(0), 0);
+      assert.equal(pump.frameAt(Date.now() + 60_000), pump.frames - 1, "after the last frame, the last frame");
+    } finally {
+      clearInterval(lag);
+      await pump.stop();
+    }
+  });
+
+  await atest("the pump's frame count is the take's clock for its cues", async () => {
+    const enc = fakeEncoder();
+    const pump = startPump({ source: heldSource(), fps: 50, maxFrames: 1000, encoder: () => enc });
+    await wait(100);
+    assert.equal(pump.frames, enc.frames);
+    assert.ok(pump.frames > 0);
+    await pump.stop();
+  });
 })();
+
+// ── sound ────────────────────────────────────────────────────────────────
+const SR = 48000;
+const sine = (hzf, seconds, amp = 1, sr = SR, phase = 0) =>
+  Float64Array.from({ length: Math.round(seconds * sr) }, (_, i) => amp * Math.sin(2 * Math.PI * hzf * (i / sr) + phase));
+
+test("a full-scale 1kHz tone in one channel meters -3.01 LUFS (BS.1770's reference)", () => {
+  const L = sine(1000, 5);
+  assert.ok(Math.abs(lufs(L, new Float64Array(L.length), SR) + 3.01) < 0.1);
+});
+
+test("loudness is right at 44.1kHz too, not only the published 48kHz", () => {
+  const L = sine(1000, 5, 1, 44100);
+  assert.ok(Math.abs(lufs(L, new Float64Array(L.length), 44100) + 3.01) < 0.1);
+});
+
+test("silence has no loudness, rather than a NaN", () => {
+  const z = new Float64Array(SR);
+  assert.equal(lufs(z, z, SR), -Infinity);
+});
+
+test("the true peak finds what sits between samples", () => {
+  // A quarter-rate sine sampled 45 degrees off its crest never shows its peak.
+  const L = sine(SR / 4, 0.1, 1, SR, Math.PI / 4);
+  const R = new Float64Array(L.length);
+  assert.ok(samplePeakDb(L, R) < -2.9, "the samples stop at -3 dB");
+  assert.ok(truePeakDb(L, R) > -0.5, "the waveform reaches 0 dB between them");
+});
+
+test("the limiter holds every sample under its ceiling", () => {
+  const L = sine(220, 0.5, 2);
+  const R = sine(330, 0.5, 2);
+  limit(L, R, SR, { ceiling: 0.8 });
+  for (let i = 0; i < L.length; i++) assert.ok(Math.abs(L[i]) <= 0.8 + 1e-9 && Math.abs(R[i]) <= 0.8 + 1e-9);
+});
+
+test("a WAV is a RIFF header and four bytes a frame", () => {
+  const buf = encodeWav(new Float64Array(10), new Float64Array(10), SR);
+  assert.equal(buf.toString("ascii", 0, 4), "RIFF");
+  assert.equal(buf.length, 44 + 40);
+  assert.equal(buf.readUInt32LE(24), SR);
+});
+
+test("cues round-trip, placed after an intro card", () => {
+  const dir = mkdtempSync(join(tmpdir(), "shotkit-cues-"));
+  const video = join(dir, "take.mp4");
+  writeCues(video, [{ beat: 30, kind: "click" }, { beat: 60, end: 90, kind: "type", chars: 4 }], 30, 15);
+  assert.deepEqual(readCues(video), [
+    { t: 1.5, kind: "click" },
+    { t: 2.5, t1: 3.5, kind: "type", chars: 4 },
+  ]);
+  assert.deepEqual(readCues(join(dir, "none.mp4")), [], "no cue file is no cues");
+});
+
+test("foley is the same file twice, and lands where its cues say", () => {
+  const cues = [{ t: 0.5, kind: "click" }, { t: 1, t1: 1.4, kind: "type", chars: 6 }, { t: 1.8, kind: "key" }];
+  const a = renderFoley(2.2, cues, SR);
+  const b = renderFoley(2.2, cues, SR);
+  assert.deepEqual(a.L, b.L, "seeded, so reproducible");
+  const energy = (from, to) => {
+    let e = 0;
+    for (let i = Math.round(from * SR); i < Math.round(to * SR); i++) e += a.L[i] * a.L[i];
+    return e;
+  };
+  assert.ok(energy(0, 0.49) === 0, "nothing before the first click");
+  assert.ok(energy(0.5, 0.6) > 0 && energy(1.0, 1.45) > 0 && energy(1.8, 1.9) > 0);
+});
+
+test("a soundtrack with no cues and no bed is silent, not broken", () => {
+  const t = mixSoundtrack(1, []);
+  assert.equal(t.left.length, SR);
+  assert.ok(t.left.every((x) => x === 0));
+  assert.equal(t.lufs, -Infinity);
+});
+
+test("a bed comes up under the clicks, and the master stays under its ceiling", () => {
+  const n = SR * 3;
+  const r = rng(5);
+  const noise = () => Float64Array.from({ length: n }, () => (r() * 2 - 1) * 0.3);
+  const t = mixSoundtrack(3, [{ t: 1, kind: "click" }], { bed: { L: noise(), R: noise() } });
+  assert.ok(Number.isFinite(t.lufs) && t.lufs > -30 && t.lufs < -10, `got ${t.lufs}`);
+  assert.ok(t.samplePeakDb <= 20 * Math.log10(0.8) + 1e-6);
+});
+
+test("--bed-db moves the bed and leaves the clicks where they were", () => {
+  const n = SR * 3;
+  const r = rng(9);
+  // Noise with a hole around the click, so what sounds there is the click alone.
+  const hole = (i) => i > 1.3 * SR && i < 1.8 * SR;
+  const bed = {
+    L: Float64Array.from({ length: n }, (_, i) => (hole(i) ? 0 : (r() * 2 - 1) * 0.2)),
+    R: new Float64Array(n),
+  };
+  const cues = [{ t: 1.5, kind: "click" }];
+  const loud = mixSoundtrack(3, cues, { bed, bedDb: -3, ceiling: 10 });
+  const quiet = mixSoundtrack(3, cues, { bed, bedDb: -12, ceiling: 10 });
+  const i = Math.round(1.505 * SR);
+  assert.ok(Math.abs(loud.left[i]) > 1e-4, "the click is there");
+  assert.equal(loud.left[i], quiet.left[i], "and the same size under either bed level");
+  assert.ok(loud.lufs > quiet.lufs, "while the bed itself moved");
+});
+
+test("the mix options come out of a spec, and nothing else does", () => {
+  assert.deepEqual(soundOptions({ op: "video", bed: "/m.mp3", bedDb: -9, sound: true, fps: 30 }), { bed: "/m.mp3", bedDb: -9 });
+});
+
+await atest("a gif is refused sound up front, before a take is spent on it", async () => {
+  await assert.rejects(() => soundFfmpeg("gif"), /no sound track/);
+});
 
 
 process.stdout.write(failures ? `\n${failures} failing\n` : "\nall passing\n");

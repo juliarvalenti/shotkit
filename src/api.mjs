@@ -23,6 +23,8 @@ import { terminalDocument } from "./terminal.mjs";
 import { cardDocument, imageCardDocument } from "./card.mjs";
 import { sheetDocument } from "./sheet.mjs";
 import { canvasArt } from "./canvas.mjs";
+import { addSound, soundOptions } from "./audio/soundtrack.mjs";
+import { soundFfmpeg } from "./audio/io.mjs";
 import { GLASS_VIDEO_SCALE, glassArt, glassMarkup, glassSource } from "./glass.mjs";
 import { resolveBaseUrl } from "./app.mjs";
 import { runCommand } from "./run.mjs";
@@ -170,6 +172,9 @@ export async function capture(spec, ctx = {}) {
     const isApp = Boolean(spec.route);
     const name = `video-${slug(spec.route ?? new URL(url).pathname)}`;
     const out = outputPath({ ...spec, format }, name);
+    // Asked before the take, not after it: a minute of recording is a lot to
+    // throw away over an ffmpeg that turns out to have no audio encoder.
+    if (spec.sound) await soundFfmpeg(format);
     const take = await record(
       eng,
       {
@@ -191,14 +196,17 @@ export async function capture(spec, ctx = {}) {
         stageLive: isStaged(spec) && spec.backdrop === "glass" ? await glassLive(spec) : undefined,
       },
     );
+    const tSound = Date.now();
+    const sound = spec.sound ? await addSound(take.path, { ...soundOptions(spec), log }) : undefined;
     // Everything about *how* the take was made is meta; the file and its shape
     // stay at the top level, where every other op puts them.
     const { capture: source, encoder, truncated, ...rest } = take;
     const result = {
       ...base,
       ...rest,
+      ...(sound ? { sound } : {}),
       meta: { url, baseUrl, viewport: frame?.name, capture: source, encoder, truncated },
-      ms: { total: Date.now() - t0, ...take.ms },
+      ms: { total: Date.now() - t0, ...take.ms, ...(sound ? { sound: Date.now() - tSound } : {}) },
     };
     if (!spec.stdout) return result;
     const bytes = await readFile(take.path);

@@ -253,6 +253,57 @@ Whichever it is, a frame is written every 1/fps whether the page changed or not,
 so the file's timeline is wall-clock and a still stretch costs repeats of one
 JPEG.
 
+## Sound
+
+A take can come out with the sound of the person driving it: a soft low tock
+on each click, a quiet tick per keystroke (spread unevenly over the span a
+string was typed in, as a hand types) and a heavier one for a key pressed on
+its own, like Enter. Over a bed, if you give it one.
+
+```bash
+shot video /settings --do click:Profile --do "fill:Name=Sam" --do press:Enter --sound
+shot video /settings --demo --do click:Profile --sound --bed ~/music/ambient.mp3
+shot sound .shotkit/video-settings.mp4 --bed ambient.mp3 --bed-db -9   # re-mix a take
+```
+
+**Cues.** Every take writes `<video>.sounds.json` beside it: each click and key
+at the second it shows in the finished video, and each typed string with the
+span it went in over. Placing them is the part that matters. A press is noted
+at the animation frame that paints it, and lands on the first video frame drawn
+after that, by the screencast's own frame timestamps. Noting "the frame being
+written right now" instead puts sounds early whenever the app is busy: its
+compositor keeps sending frames of the old picture for a while after a click.
+Measured against the picture, a click's sound lands within one frame (33ms) of
+the press. Speed-ups and title cards are already folded in.
+
+**The mix.** A bed (any file ffmpeg reads, looped or cut to the take's length)
+is brought to −23 LUFS, the clicks sit at a fixed size over it, and `--target`
+(−19) sets how loud the pair is together. `--bed-db` (−6) then moves the bed
+alone, so turning it down leaves the clicks where they were. With no bed the
+clicks are leveled by their peak instead (−6 dBFS at the default target), since
+a few clicks in silence meter near −40 LUFS and loudness is the wrong ruler.
+`--click-db` and `--key-db` trim each kind; `--no-foley` keeps the bed alone.
+A look-ahead limiter holds the master under −1.9 dBFS. The build prints the
+finished loudness (BS.1770-4) and the 4x-oversampled true peak, since those are
+the numbers that say whether it is too loud.
+
+**Needs a full ffmpeg.** Sound is AAC in an mp4 and Opus in a webm, and
+Playwright's bundled ffmpeg has neither; a gif has no sound at all. `--sound`
+checks before the take starts, so a minute of recording isn't lost to the wrong
+ffmpeg. The picture is copied into the muxed file, not re-encoded.
+
+**As a library.** `import { addSound, mixSoundtrack } from "shotkit/audio"`. A
+project that scores its own bed renders a stereo pair with the primitives there
+(oscillators, a state-variable filter, pink noise, an FDN reverb, envelopes,
+wavetables, the compressor, limiter and loudness meter) and passes it as `bed`;
+the clicks, the leveling and the mux stay shotkit's:
+
+```js
+import { addSound, makeBus, hz, rng } from "shotkit/audio";
+const bed = myScore(durationSeconds, 48000); // { L: Float64Array, R: Float64Array }
+await addSound("demo.mp4", { bed, bedDb: -6, target: -19 });
+```
+
 ## Browser chrome
 
 `--chrome` re-renders a page capture inside the same window frame the terminal

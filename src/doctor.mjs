@@ -126,6 +126,8 @@ export async function doctor() {
     ok(`ffmpeg (${caps.source}) ${caps.path}`);
     if (caps.formats.includes("mp4")) ok(`writes ${caps.formats.join(", ")}`);
     else warn(`writes ${caps.formats.join(", ") || "nothing"} — install a full ffmpeg for mp4 and gif`);
+    if (caps.audio.length) ok(`sound in ${caps.audio.join(", ")} — \`--sound\` and \`shot sound\` work`);
+    else warn("no AAC or Opus encoder — `--sound` needs a full ffmpeg");
   } catch (e) {
     bad(e.message.split("\n")[0]);
   }

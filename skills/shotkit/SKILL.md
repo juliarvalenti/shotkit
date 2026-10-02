@@ -82,6 +82,23 @@ and `speed:<n>`. Output is mp4 with a full ffmpeg on PATH, else webm. You can't
 watch it: give the path to the user, or pull a frame out with ffmpeg to look
 at. Keep takes short.
 
+### Sound
+
+```bash
+shot video / --do click:Save --sound                      # clicks and keys, heard
+shot video / --demo --do click:Save --sound --bed music.mp3
+shot sound .shotkit/take.mp4 --bed music.mp3 --bed-db -9  # (re)mix an existing take
+```
+
+Every take writes `<video>.sounds.json` (each click and key at the second it
+shows). `--sound` mixes a tock per click and ticks per keystroke over an
+optional `--bed` file and muxes it in. `--bed-db` moves the bed alone (default
+-6); `--target` sets the overall loudness (default -19 LUFS). Needs a full
+ffmpeg (AAC/Opus); not for gif. You can't hear it either: report the LUFS and
+true peak the command prints, and hand the file to the user. In code:
+`import { addSound } from "shotkit/audio"`, with `bed` as a file or a rendered
+`{ L, R }` pair.
+
 ## Framing for a PR or doc
 
 ```bash

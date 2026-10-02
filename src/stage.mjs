@@ -128,6 +128,9 @@ export function driftAt(tilt, drift, t) {
  * @property {"dark"|"light"} [theme]
  * @property {string} [backdrop] `stage` (default), any theme preset, or CSS
  * @property {string} [art] artwork over the backdrop, as on a card
+ * @property {StageWords} [words] captions and title cards drawn on the stage
+ * @property {string} [live] markup for a scene that moves under the window (the
+ *   glass backdrop on a video), seeked per frame through `window.__glass`
  * @property {number} [width] stage width in CSS px (default 1920)
  * @property {number} [height] (default 1080)
  * @property {number} [perspective] px; smaller is more dramatic (default 1800)
@@ -137,6 +140,14 @@ export function driftAt(tilt, drift, t) {
  * @property {boolean} [grid] a faint grid on the ground
  * @property {number} [radius] corner radius for `frame: "window"` (default 12)
  * @property {string} [src] image source; set later through `window.__stage` if absent
+ */
+
+/**
+ * @typedef {object} StageWords
+ * @property {string} [fonts] a stylesheet URL for the faces
+ * @property {string} [titleFont] @property {string} [titleStyle] @property {string} [textFont]
+ * @property {string} [accent] @property {string} [logo] a data: URL
+ * @property {"bottom"|"top"} [at] where a caption sits
  */
 
 /** How much the flat image is scaled to sit in the stage at `fit`. */
@@ -185,7 +196,33 @@ export function stageDocument(o) {
     ? `-webkit-box-reflect:below 10px linear-gradient(transparent 62%, rgba(255,255,255,${dark ? ".16" : ".28"}));`
     : "";
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  const wd = o.words;
+  const titleFont = wd?.titleFont ?? 'Georgia, "Times New Roman", serif';
+  const titleStyle = wd?.titleStyle ?? "italic 600";
+  const textFont = wd?.textFont ?? '-apple-system, "Segoe UI", system-ui, sans-serif';
+  const ink = dark ? "#eaecef" : "#0e1a33";
+  const muted = dark ? "#a9afb7" : "#4b5872";
+  const halo = dark ? "0 2px 28px rgba(0,0,0,.75), 0 1px 3px rgba(0,0,0,.6)" : "0 2px 24px rgba(255,255,255,.8)";
+  const capPos = wd?.at === "top" ? "top:7%" : "bottom:8%";
+  // Words sit on a panel of their own, so they read over the window and the
+  // art behind them alike.
+  const panel = dark
+    ? "background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 50px rgba(0,0,0,.45)"
+    : "background:rgba(255,255,255,.78);border:1px solid rgba(14,26,51,.08);box-shadow:0 18px 50px rgba(14,26,51,.18)";
+  const pad = `${Math.round(h * 0.026)}px ${Math.round(h * 0.034)}px`;
+  const words = wd
+    ? `#cap{position:absolute;left:6.5%;${capPos};max-width:46%;opacity:0;will-change:opacity,transform;
+  padding:${pad};border-radius:${Math.round(h * 0.014)}px;${panel};-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+#title .panel{padding:${Math.round(h * 0.045)}px ${Math.round(h * 0.07)}px;border-radius:${Math.round(h * 0.02)}px;${panel};-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);display:flex;flex-direction:column;align-items:center}
+#cap .t{font:${titleStyle} ${Math.round(h * 0.056)}px/1.04 ${titleFont};color:${ink};letter-spacing:-.01em;text-shadow:${halo}}
+#cap .s{margin-top:${Math.round(h * 0.014)}px;font:400 ${Math.round(h * 0.022)}px/1.45 ${textFont};color:${muted};text-shadow:${halo};max-width:36em}
+#cap .bar{width:${Math.round(h * 0.04)}px;height:3px;border-radius:2px;background:${wd.accent ?? pal.accent};margin-bottom:${Math.round(h * 0.02)}px}
+#title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:0}
+#title img{width:${Math.round(h * 0.1)}px;height:auto;margin-bottom:${Math.round(h * 0.02)}px;filter:drop-shadow(0 8px 30px rgba(0,0,0,.5))}
+#title .t{font:${titleStyle} ${Math.round(h * 0.13)}px/1 ${titleFont};color:${ink};letter-spacing:-.015em;text-shadow:${halo}}
+#title .s{margin-top:${Math.round(h * 0.024)}px;font:400 ${Math.round(h * 0.026)}px/1.4 ${textFont};color:${muted};text-shadow:${halo}}`
+    : "";
+  return `<!doctype html><html><head><meta charset="utf-8">${wd?.fonts ? `<link rel="stylesheet" href="${wd.fonts}">` : ""}<style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:transparent}
 #canvas{position:relative;width:${w}px;height:${h}px;overflow:hidden;background:${ground}}
@@ -195,16 +232,47 @@ html,body{margin:0;padding:0;background:transparent}
   -webkit-mask-image:radial-gradient(closest-side, #000 20%, transparent 80%)}
 #glow{position:absolute;left:50%;top:50%;width:${Math.round(w * 0.9)}px;height:${Math.round(h * 0.9)}px;
   transform:translate(-50%,-50%)}
-#scene{position:absolute;inset:0;display:grid;place-items:center}
+#scene{position:absolute;inset:0;display:grid;place-items:center${wd ? `;transform:translate(2.5%,${wd.at === "top" ? "3%" : "-3%"})` : ""}}
 #win{${windowFrame}border-radius:${radius}px;overflow:hidden;box-shadow:${shadow};backface-visibility:hidden;${reflect}
   transform:${tiltTransform(o.tilt, k, o.perspective)};will-change:transform}
 #win img{display:block;width:${o.imgWidth}px;height:${o.imgHeight}px}
-</style></head><body><div id="canvas">${o.art ? '<div id="art"></div>' : ""}${grid}${glow}
-<div id="scene"><div id="win"><img id="shot" alt="" ${o.src ? `src="${o.src}"` : ""}></div></div></div>
+${words}
+</style></head><body><div id="canvas">${o.live ?? ""}${o.art && !o.live ? '<div id="art"></div>' : ""}${grid}${glow}
+<div id="scene"><div id="win"><img id="shot" alt="" ${o.src ? `src="${o.src}"` : ""}></div></div>${
+    wd ? `<div id="cap"></div><div id="title"><div class="panel">${wd.logo ? `<img src="${wd.logo}" alt="">` : ""}<div class="t"></div><div class="s"></div></div></div>` : ""
+  }</div>
 <script>
+const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+let capText = null, titleText = null;
 window.__stage = {
-  async set(src, transform) {
+  async set(src, transform, frame, view) {
     const img = document.getElementById("shot");
+    if (frame !== undefined && window.__glass) window.__glass.seek(frame);
+    if (view) {
+      const cap = document.getElementById("cap"), title = document.getElementById("title");
+      if (cap && view.cap) {
+        if (view.cap.text !== capText) {
+          capText = view.cap.text;
+          const [t, sub] = capText.split("|");
+          cap.innerHTML = '<div class="bar"></div><div class="t">' + esc(t.trim()) + "</div>" +
+            (sub ? '<div class="s">' + esc(sub.trim()) + "</div>" : "");
+        }
+        cap.style.opacity = view.cap.alpha;
+        cap.style.transform = "translateY(" + ((1 - view.cap.alpha) * 14).toFixed(2) + "px)";
+      }
+      if (title && view.title) {
+        if (view.title.text !== titleText) {
+          titleText = view.title.text;
+          const [t, sub] = titleText.split("|");
+          title.querySelector(".t").textContent = (t || "").trim();
+          title.querySelector(".s").textContent = (sub || "").trim();
+        }
+        title.style.opacity = view.title.alpha;
+        title.style.transform = "scale(" + (0.985 + 0.015 * view.title.alpha).toFixed(4) + ")";
+      }
+      document.getElementById("scene").style.opacity = view.win;
+    }
+    if (src === null) return;
     if (transform) document.getElementById("win").style.transform = transform;
     if (src && img.getAttribute("src") !== src) { img.src = src; await img.decode().catch(() => {}); }
   },

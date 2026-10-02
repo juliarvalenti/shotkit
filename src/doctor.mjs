@@ -15,6 +15,7 @@ import { DEFAULT_OUT_DIR } from "./api.mjs";
 import { FRONTEND_DIR } from "./app.mjs";
 import { loadPlaywright } from "./engine.mjs";
 import { ART_RENDERING, CANVAS_SOURCE } from "./canvas.mjs";
+import { GLASS_SOURCE } from "./glass.mjs";
 import { CONFIG_FILE, MOCK_SCRIPT, PROJECT_ROOT } from "./project.mjs";
 import { candidates, launchChromium } from "./browser.mjs";
 import { ptyAvailable } from "./run.mjs";
@@ -69,7 +70,8 @@ async function probeWebfonts(pw) {
     if (reachable) ok(`${FONT_PROBE_HOST} reachable in ${ms}ms — captures render with the real fonts`);
     else {
       warn(`${FONT_PROBE_HOST} unreachable (gave up after ${ms}ms)`);
-      warn("  every app capture will wait on it, then fall back. Pass --offline to skip the wait.");
+      warn("  every app capture will wait on it, then fall back. Pass --offline to skip the wait,");
+      warn("  or, behind an egress proxy, point SHOTKIT_PROXY at it.");
       warn("  published screenshots taken here will use fallback fonts — regenerate on a connected host.");
     }
   } catch (e) {
@@ -132,6 +134,9 @@ export async function doctor() {
   if (!CANVAS_SOURCE) ok("no backdrop.canvas configured — `--backdrop canvas` is off; the other presets work");
   else if (existsSync(CANVAS_SOURCE)) ok(`${CANVAS_SOURCE} present — \`--backdrop canvas\` paints it (${ART_RENDERING === "pixelated" ? "pixelated" : "smooth"})`);
   else warn(`${CANVAS_SOURCE} missing — \`--backdrop canvas\` errors; the other presets are unaffected`);
+  if (!GLASS_SOURCE) ok("no backdrop.glass configured — `--backdrop glass` is off");
+  else if (existsSync(GLASS_SOURCE)) ok(`${GLASS_SOURCE} present — \`--backdrop glass\` runs its scene`);
+  else warn(`${GLASS_SOURCE} missing — \`--backdrop glass\` errors`);
 
   head("webfonts");
   await probeWebfonts(pw);

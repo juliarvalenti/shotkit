@@ -25,7 +25,16 @@
  *     "backdrop": {
  *       "canvas": "scripts/canvas.js",      // script that paints --backdrop canvas
  *       "size": "1920x1080",                // the page it paints on (default 1920x1080)
- *       "pixelated": false                  // upscale hard-edged, for pixel art (default false)
+ *       "pixelated": false,                 // upscale hard-edged, for pixel art (default false)
+ *       "glass": "docs/glass.js"            // a seekable scene for --backdrop glass
+ *     },
+ *     "stage": {                             // how a staged video's words look
+ *       "fonts": "https://…/css2?family=…",  // a stylesheet for the faces below
+ *       "titleFont": "\"Cormorant Garamond\", Georgia, serif",
+ *       "titleStyle": "italic 600",          // weight/style of the headline
+ *       "textFont": "\"IBM Plex Sans\", sans-serif",
+ *       "accent": "#5dd4e0",
+ *       "logo": "docs/logo.png"              // shown on the intro and outro cards
  *     }
  *   }
  */
@@ -88,3 +97,15 @@ function canvasSize(value) {
 
 /** The page the canvas script paints on, in CSS px; scripts often scale their scene to it. */
 export const CANVAS_SIZE = canvasSize(config.backdrop?.size);
+/** @type {string | null} absolute path, or null when the project names none */
+export const GLASS_PATH = config.backdrop?.glass ? resolve(PROJECT_ROOT, config.backdrop.glass) : null;
+/** How a staged video's captions and title cards look; every field optional. */
+export const STAGE_STYLE = {
+  fonts: config.stage?.fonts ?? null,
+  titleFont: config.stage?.titleFont ?? null,
+  titleStyle: config.stage?.titleStyle ?? null,
+  textFont: config.stage?.textFont ?? null,
+  accent: config.stage?.accent ?? null,
+  /** @type {string | null} absolute path */
+  logo: config.stage?.logo ? resolve(PROJECT_ROOT, config.stage.logo) : null,
+};

@@ -101,7 +101,7 @@ speedup: 13.1x
 | `shot term <command…>` | run a command, shoot its terminal output |
 | `shot text <file\|->` | render an existing ANSI capture |
 | `shot code <file>` | a syntax-highlighted code card |
-| `shot html <file\|->` | render an HTML document |
+| `shot html <file\|->` | render an HTML document; with a page option (`--do`, `--wait`, `--full-page`) it opens the file as a page |
 | `shot video [route]` | record a short take — see **Video** |
 | `shot open` / `do` / `shoot` / `close` | drive a page held open — see **Navigation** |
 | `shot warm` / `status` / `stop` / `serve` | the daemon |

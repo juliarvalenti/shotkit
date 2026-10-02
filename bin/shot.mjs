@@ -19,7 +19,8 @@
 import { spawn } from "node:child_process";
 import { homedir, platform } from "node:os";
 import { resolve } from "node:path";
-import { helpFor, parse } from "../src/args.mjs";
+import { pathToFileURL } from "node:url";
+import { camel, helpFor, parse, UsageError } from "../src/args.mjs";
 import { ACTION_HELP } from "../src/actions.mjs";
 
 const OUTPUT = {
@@ -250,7 +251,10 @@ const COMMAND_HELP = {
   term: ["shot term [options] <command…>   (flags must precede the command)", { ...TERM, ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   text: ["shot text <file|-> [options]", { ...TERM, ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   code: ["shot code <file> [options]", { ...CODE, ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
-  html: ["shot html <file|-> [options]", { ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
+  html: [
+    "shot html <file|-> [options]       — a page option (--do, --wait, --full-page…) opens the file as a page",
+    { ...CARD, ...PAGE, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON },
+  ],
   open: ["shot open <route|url> [options]   — hold a page open under a name", { ...SESSION, ...APP, ...PAGE, ...RESPONSIVE, ...FRAME, ...DAEMON }],
   do: ["shot do <verb:arg…> [options]       — drive the held page", { ...SESSION, ...PAGE, ...DAEMON }],
   shoot: ["shot shoot [verb:arg…] [options]   — shoot the held page as it stands", { ...SESSION, ...PAGE, ...CHROME, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
@@ -384,6 +388,11 @@ function report(result, flags) {
   err(`[shot] ${result.op} · ${bits.join(" · ")} · ${result.mode ?? "daemon"}${size}`);
   if (result.meta?.exitCode) err(`[shot] command exited ${result.meta.exitCode}`);
   if (result.meta?.hint) err(`[shot] ${result.meta.hint}`);
+  // What an `eval:` read off the page. On stderr, so stdout stays the path.
+  for (const step of result.meta?.trace ?? result.trace ?? []) {
+    if (step.value === undefined) continue;
+    err(`[shot] ${step.action.slice(0, 60)} → ${typeof step.value === "string" ? step.value : JSON.stringify(step.value)}`);
+  }
   for (const step of result.trace ?? []) err(`[shot]   ${step.action} (${step.ms}ms)`);
   for (const shot of result.shots ?? []) err(`[shot]   ${shot.viewport} · ${shot.ms}ms · ${shot.width}x${shot.height}`);
   reportSound(result.sound, result.ms?.sound);
@@ -499,7 +508,14 @@ async function main() {
     return;
   }
   const [, flagSpec] = entry;
-  const { flags, rest } = parse(argv, flagSpec, { stopAtPositional: command === "term" });
+  let parsed;
+  try {
+    parsed = parse(argv, flagSpec, { stopAtPositional: command === "term" });
+  } catch (e) {
+    if (e instanceof UsageError) throw new UsageError(`${e.message}\n  shot help ${command} lists what it takes.`);
+    throw e;
+  }
+  const { flags, rest } = parsed;
 
   let spec;
   if (command === "term") {
@@ -534,9 +550,20 @@ async function main() {
   } else if (command === "html") {
     const src = rest[0];
     if (!src) throw new Error("shot html needs a file, or - for stdin");
-    spec = toSpec("html", flags);
-    if (src === "-") spec.html = await readStdin();
-    else spec.file = resolve(src);
+    // A document that loads its fonts, runs a script, or has to be clicked
+    // through is a page, not a card: given anything a page takes, it is opened
+    // from disk the way `shot url` opens one, so its relative paths resolve and
+    // --do runs against it.
+    const pageFlags = Object.entries(PAGE).map(([name, s]) => s.dest ?? camel(name));
+    if (pageFlags.some((f) => flags[f] !== undefined)) {
+      if (src === "-") throw new UsageError("shot html - (stdin) is shot as a card; page options need a file");
+      spec = toSpec("url", flags);
+      spec.url = pathToFileURL(resolve(src)).href;
+    } else {
+      spec = toSpec("html", flags);
+      if (src === "-") spec.html = await readStdin();
+      else spec.file = resolve(src);
+    }
   } else if (command === "video") {
     spec = toSpec("video", flags);
     const target = rest[0] ?? "/";
@@ -556,6 +583,10 @@ async function main() {
 }
 
 main().catch((e) => {
-  err(`[shot] ${e?.stack ?? e}`);
-  process.exit(1);
+  // What went wrong, once: an error relayed from the daemon arrives as
+  // "Error: Error: …", and a stack says nothing to someone who mistyped a flag.
+  // SHOT_DEBUG=1 brings the stack back.
+  const message = String(e?.message ?? e).replace(/^(Error: )+/, "");
+  err(`[shot] ${process.env.SHOT_DEBUG ? (e?.stack ?? e) : message}`);
+  process.exit(e instanceof UsageError ? 2 : 1);
 });

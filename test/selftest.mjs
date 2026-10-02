@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { ansiToHtml, parseAnsi, stripAnsi } from "../src/ansi.mjs";
 import { splitHighlightedLines, guessLanguage } from "../src/code.mjs";
-import { parse } from "../src/args.mjs";
+import { parse, UsageError } from "../src/args.mjs";
 import { policyArgs, policyKey } from "../src/network.mjs";
 import { resolveViewport, viewportList } from "../src/viewports.mjs";
 import { locate, parseAction } from "../src/actions.mjs";
@@ -155,6 +155,13 @@ test("term stops parsing its own flags at the command", () => {
   assert.equal(flags.cols, 84);
   assert.equal(flags.room, undefined, "--room belongs to the child command");
   assert.deepEqual(rest, ["mycelium", "memory", "ls", "--room", "atlas"]);
+});
+
+test("a mistyped flag is a usage error that names the one meant", () => {
+  const spec = { do: { type: "list" }, "full-page": { type: "boolean" }, theme: { type: "string" } };
+  assert.throws(() => parse(["--doo", "x"], spec), (e) => e instanceof UsageError && /did you mean --do\?/.test(e.message));
+  assert.throws(() => parse(["--full"], spec), /did you mean --full-page\?/);
+  assert.throws(() => parse(["--zebra"], spec), (e) => e instanceof UsageError && !/did you mean/.test(e.message));
 });
 
 test("--no-<flag> negates a boolean", () => {

@@ -118,7 +118,7 @@ const SELF_PACED = new Set([
  * @param {import("playwright").Page} page
  * @param {string[]} actions
  * @param {{baseUrl?:string, timeout?:number, log?:(m:string)=>void, cursor?:Cursor}} ctx
- * @returns {Promise<{action:string, ms:number}[]>}
+ * @returns {Promise<{action:string, ms:number, value?:any}[]>}
  */
 export async function runActions(page, actions, ctx = {}) {
   const timeout = ctx.timeout ?? 15_000;
@@ -127,6 +127,8 @@ export async function runActions(page, actions, ctx = {}) {
   for (const raw of actions ?? []) {
     const started = Date.now();
     const { verb, arg } = parseAction(raw);
+    /** What an `eval` gave back, so a script can read the page and say so. */
+    let value;
     switch (verb) {
       case "click":
         if (cursor) await cursor.click(await locate(page, arg), { timeout });
@@ -240,7 +242,8 @@ export async function runActions(page, actions, ctx = {}) {
         break;
       }
       case "eval":
-        await page.evaluate(arg);
+        // Awaited in the page, so an async expression's result comes back too.
+        value = await page.evaluate(arg);
         break;
       case "emulate":
         // `emulate:dark` / `emulate:light` — flip the media query mid-session
@@ -253,9 +256,8 @@ export async function runActions(page, actions, ctx = {}) {
         throw new Error(`unknown action "${verb}" in "${raw}"${ACTION_HELP}`);
     }
     if (cursor && !SELF_PACED.has(verb)) await cursor.dwell();
-    trace.push({ action: raw, ms: Date.now() - started });
-    ctx.log?.(`${raw} (${Date.now() - started}ms)`);
-  }
+    trace.push({ action: raw, ms: Date.now() - started, ...(value === undefined ? {} : { value }) });
+    ctx.log?.(`${raw} (${Date.now() - started}ms)`);  }
   return trace;
 }
 
@@ -270,7 +272,7 @@ export const ACTION_HELP = `
   scroll:<px|top|bottom|sel>                    sleep:<ms> / hold:<ms>
   wait:<sel>           until visible           wait-hidden:<sel>  until gone
   wait-text:<text>     until text appears      wait-url:<glob>    until routed
-  eval:<js>            run JS in the page
+  eval:<js>            run JS in the page; what it returns is printed
 
   Recording only (\`shot video\`), and ignored elsewhere:
   zoom:<sel>           push in on it        zoom:2             push in on the cursor

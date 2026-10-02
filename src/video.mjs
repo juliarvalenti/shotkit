@@ -29,6 +29,8 @@ import { frameOf, policyOf, preparePage, seedStorage } from "./engine.mjs";
 import { runActions } from "./actions.mjs";
 import { MAX_SPEED, frameSource, startPump } from "./pump.mjs";
 import { palette } from "./theme.mjs";
+import { isStaged, pickStage } from "./stage.mjs";
+import { restage, startSpool } from "./restage.mjs";
 
 /** Timing, in ms. Beats a viewer can follow rather than the fastest that works. */
 export const TIMING = {
@@ -151,6 +153,8 @@ export async function record(eng, spec, ctx) {
   const page = await context.newPage();
   let pump = null;
   let capTimer = null;
+  /** @type {ReturnType<typeof startSpool> | null} */
+  let spool = null;
   try {
     await page.goto(spec.url, { waitUntil: spec.waitUntil ?? "domcontentloaded", timeout: spec.timeout ?? 30_000 });
     // Waits, hidden selectors and extra CSS, but not the actions: those are the
@@ -165,11 +169,15 @@ export async function record(eng, spec, ctx) {
       frame,
       log,
     });
+    const encode = (size) => startEncoder({ ...size, format, fps, crf: spec.crf, out: ctx.out, ffmpeg: caps.path });
+    // On a stage the take goes to a spool, and is tilted and encoded after it
+    // ends (restage.mjs); the pump drives either the same way.
+    const staged = isStaged(spec);
     pump = startPump({
       source,
       fps,
       maxFrames: fps * clamp(spec.maxSeconds ?? VIDEO_DEFAULTS.maxSeconds, 1, 600),
-      encoder: (size) => startEncoder({ ...size, format, fps, crf: spec.crf, out: ctx.out, ffmpeg: caps.path }),
+      encoder: staged ? () => (spool = startSpool()) : encode,
       log,
     });
 
@@ -193,7 +201,29 @@ export async function record(eng, spec, ctx) {
     if (trace === "encoder") log("the encoder stopped; ending the take");
     await sleep(timing.tailMs);
 
-    const { frames, width, height } = await pump.stop();
+    let { frames, width, height } = await pump.stop();
+    const url = page.url();
+    const tStage = Date.now();
+    let staging;
+    if (spool) {
+      // The take is over: its page has nothing left to show, and would only
+      // compete with the staging pass for the CPU.
+      await context.close().catch(() => {});
+      const stage = pickStage(spec);
+      const result = await restage(eng, spool, {
+        stage,
+        drift: spec.drift ?? STAGE_DRIFT,
+        theme: spec.theme ?? "dark",
+        art: ctx.stageArt,
+        frameWidth: Math.round(width / frame.scale),
+        frameHeight: Math.round(height / frame.scale),
+        quality: spec.quality ?? VIDEO_DEFAULTS.quality,
+        encoder: encode,
+        log,
+      });
+      ({ width, height } = result);
+      staging = { tilt: stage.tilt, drift: spec.drift ?? STAGE_DRIFT, rendered: result.rendered, ms: Date.now() - tStage };
+    }
     return {
       path: ctx.out,
       format,
@@ -206,15 +236,20 @@ export async function record(eng, spec, ctx) {
       capture: pump.mode,
       truncated: trace === "over" || pump.truncated,
       trace: Array.isArray(trace) ? trace : [],
-      url: page.url(),
-      ms: { total: Date.now() - t0 },
+      url,
+      ...(staging ? { stage: staging } : {}),
+      ms: { total: Date.now() - t0, ...(staging ? { stage: staging.ms } : {}) },
     };
   } finally {
     clearTimeout(capTimer);
     if (pump) await pump.abort();
+    spool?.remove();
     await context.close().catch(() => {});
   }
 }
+
+/** Degrees a staged take swings across its length unless `--drift` says otherwise. */
+export const STAGE_DRIFT = 10;
 
 /** The take: lead-in, the actions, and whatever the tail catches. */
 async function drive(page, spec, cursor, timing) {

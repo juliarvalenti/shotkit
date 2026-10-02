@@ -24,6 +24,8 @@ import { cardDocument } from "../src/card.mjs";
 import { encodeArgs, findEncoder, forgetEncoder, jpegSize, startEncoder } from "../src/encode.mjs";
 import { parseZoom } from "../src/video.mjs";
 import { startPump } from "../src/pump.mjs";
+import { TILT_PRESETS, driftAt, isStaged, parseStageSize, parseTilt, stageDocument } from "../src/stage.mjs";
+import { startSpool } from "../src/restage.mjs";
 import { existsSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -258,6 +260,55 @@ test("one seed grows one network", () => {
   assert.ok(a.includes("var s=7;"), "the seed replaces Math.random before the algorithm runs");
   assert.notEqual(a, networkDocument("/* algorithm */", { seed: 8 }));
   assert.equal(a, networkDocument("/* algorithm */", { seed: 7 }));
+});
+
+test("--tilt reads a preset, three angles, or one dutch angle", () => {
+  assert.deepEqual(parseTilt(undefined), TILT_PRESETS.hero);
+  assert.deepEqual(parseTilt("left"), TILT_PRESETS.left);
+  assert.deepEqual(parseTilt("-8,18,-6"), [-8, 18, -6]);
+  assert.deepEqual(parseTilt("12"), [0, 0, 12]);
+  assert.throws(() => parseTilt("sideways"), /preset/);
+  assert.throws(() => parseTilt("1,2,3,4"), /preset/);
+});
+
+test("the stage is asked for by --demo or any --tilt, and sized by --stage", () => {
+  assert.equal(isStaged({}), false);
+  assert.equal(isStaged({ demo: true }), true);
+  assert.equal(isStaged({ tilt: "dutch" }), true);
+  assert.deepEqual(parseStageSize("1280x720"), { width: 1280, height: 720 });
+  assert.throws(() => parseStageSize("wide"), /WxH/);
+});
+
+test("drift swings the angle across a take and holds it at zero", () => {
+  const tilt = [10, -20, 4];
+  const a = driftAt(tilt, 10, 0);
+  const b = driftAt(tilt, 10, 1);
+  assert.equal(b.tilt[1] - a.tilt[1], 10, "y sweeps the whole drift");
+  assert.equal(driftAt(tilt, 10, 0.5).tilt[1], -20, "the midpoint is the configured angle");
+  assert.equal(a.tilt[2], 4, "the dutch angle holds");
+  assert.deepEqual(driftAt(tilt, 0, 0.3), { tilt, zoom: 1 });
+});
+
+test("the stage document carries its options", () => {
+  const html = stageDocument({ imgWidth: 1280, imgHeight: 800, tilt: [0, 0, -7], reflect: true, glow: false });
+  assert.ok(html.includes("rotateZ(-7deg)"));
+  assert.ok(html.includes("-webkit-box-reflect"));
+  assert.ok(!html.includes('id="glow"'));
+});
+
+test("the spool keeps one file per distinct frame and the order of beats", async () => {
+  const spool = startSpool();
+  try {
+    const a = Buffer.from("a");
+    const b = Buffer.from("b");
+    for (const f of [a, a, a, b, b, a]) spool.write(f);
+    assert.deepEqual(spool.order, [0, 0, 0, 1, 1, 2]);
+    assert.equal(spool.read(1).toString(), "b");
+    assert.deepEqual(await spool.finish(), { frames: 6 });
+  } finally {
+    spool.remove();
+  }
+  assert.equal(existsSync(spool.dir), false);
 });
 
 test("the vignette veils light less than dark", () => {

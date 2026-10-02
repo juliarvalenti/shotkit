@@ -143,12 +143,12 @@ export class Engine {
   }
 
   /**
-   * Render a self-contained HTML document and shoot one element from it.
-   * @param {{html:string, selector?:string, theme?:string, scale?:number,
-   *          format?:string, quality?:number, transparent?:boolean,
-   *          width?:number, height?:number}} opts
+   * The pooled page static renders reuse, one per frame size. Exposed for a
+   * caller that sets a document once and then swaps what is in it many times,
+   * which is how a video re-stages its frames.
+   * @param {{theme?:string, scale?:number, width?:number, height?:number}} opts
    */
-  async captureStatic(opts) {
+  async staticPage(opts) {
     const theme = opts.theme ?? "dark";
     const scale = opts.scale ?? 2;
     // Generous enough that a card is rarely larger than the frame; Playwright
@@ -163,7 +163,17 @@ export class Engine {
       page = await ctx.newPage();
       this.staticPages.set(key, page);
     }
+    return page;
+  }
 
+  /**
+   * Render a self-contained HTML document and shoot one element from it.
+   * @param {{html:string, selector?:string, theme?:string, scale?:number,
+   *          format?:string, quality?:number, transparent?:boolean,
+   *          width?:number, height?:number}} opts
+   */
+  async captureStatic(opts) {
+    const page = await this.staticPage(opts);
     await page.setContent(opts.html, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
     return page.locator(opts.selector ?? "#canvas").first().screenshot({

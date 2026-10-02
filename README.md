@@ -255,6 +255,43 @@ shot app / --chrome --theme dark --chrome-theme light
 `--theme` drives the app's own theme, not just the browser's `prefers-color-scheme`:
 next-themes reads `localStorage` before first paint and would otherwise ignore it.
 
+## Tech-demo framing
+
+`--demo` puts the shot on a stage: tilted in perspective, floating over a dark
+ground with a soft accent glow behind it, the angled product shot from a launch
+page. It works on `app`, `url`, `shoot`, `term`, `text`, `code`, `html` and
+`video`.
+
+```bash
+shot app / --demo                                  # the hero angle
+shot app / --demo --chrome                         # with the browser window bar
+shot code src/server.ts --range 40:80 --tilt right --reflect
+shot url https://example.com --tilt dutch          # a flat dutch tilt, no 3D
+shot term --tilt 10,-24,3 -- git log --oneline -8  # your own angles, in degrees
+shot video /settings --demo --do click:Profile --drift 14
+```
+
+`--tilt` takes a preset (`hero`, `left`, `right`, `dutch`, `desk`, `flat`) or
+`x,y,z` in degrees: x tips the top away, y turns the window to face left or
+right, z is the dutch angle. One number is a dutch tilt on its own. Any
+`--tilt` implies `--demo`.
+
+| | |
+|---|---|
+| `--perspective <px>` | camera distance; smaller is more dramatic (default 1800) |
+| `--fit <0-1>` | how much of the stage the flat window fills (default 0.74) |
+| `--stage <WxH>` | stage size in CSS px (default 1920x1080; a still is at `--scale`, so 3840x2160 by default) |
+| `--no-glow` / `--reflect` / `--grid` | drop the glow; add a faint reflection; add a perspective grid on the ground |
+| `--backdrop` | the ground, as everywhere else; unset, the stage uses its own near-black (or near-white with `--theme light`) |
+| `--drift <deg>` | video only: swing the angle this far across the take, with a slow push in (default 10, `0` holds still) |
+
+A still is re-rendered once, the way `--chrome` is: the browser does the 3D,
+so the type stays sharp instead of being resampled. A video is recorded as
+usual to a spool on disk, then each frame is put on the stage and encoded
+after the take ends, which is what lets the camera drift across the whole of
+it. That pass costs about 25ms a frame spread over four pages; with
+`--drift 0`, a stretch where nothing moves is rendered once.
+
 ## The desktop
 
 `--backdrop mycelial` puts a generated hypha network behind the window, so a

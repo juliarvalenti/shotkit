@@ -17,6 +17,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -182,6 +183,7 @@ const TERM = {
   prompt: { type: "string", value: "<sigil>", help: "prompt sigil, or --no-prompt to hide the line" },
   "show-exit": { type: "boolean", help: "show a non-zero exit code (default on)" },
   verbose: { type: "boolean", help: "on failure, print the stack too" },
+  project: { type: "string", value: "<dir>", help: "the project (config, output folder) to work as" },
   "command-timeout": { type: "number", value: "<ms>", help: "kill the command after N ms" },
   env: { type: "map", value: "<k>=<v>", help: "extra environment (repeatable)" },
   echo: { type: "boolean", help: "include the plain-text output in --json" },
@@ -227,6 +229,26 @@ const VERBOSE_FLAG = process.argv[2] === "term" ? -1 : process.argv.indexOf("--v
 if (VERBOSE_FLAG !== -1) process.argv.splice(VERBOSE_FLAG, 1);
 let VERBOSE = VERBOSE_FLAG !== -1 || Boolean(process.env.SHOTKIT_DEBUG || process.env.SHOT_DEBUG);
 
+/**
+ * `--project <dir>`: shoot another checkout (a worktree of main, say) without
+ * cd-ing into it. It has to land before src/project.mjs is first imported,
+ * which fixes the project for the process, so like --verbose it is taken out
+ * of argv up front; `shot term` reads it as an ordinary flag instead.
+ */
+function useProject(dir) {
+  if (!dir) throw new UsageError("--project needs a folder: shot app / --project ../app-main");
+  const path = resolve(dir);
+  if (!existsSync(path)) throw new UsageError(`--project ${dir}: no such folder`);
+  process.env.SHOTKIT_PROJECT = path;
+}
+const PROJECT_FLAG = process.argv[2] === "term" ? -1 : process.argv.findIndex((a) => a === "--project" || a.startsWith("--project="));
+const projectArg =
+  PROJECT_FLAG === -1
+    ? undefined
+    : process.argv[PROJECT_FLAG].includes("=")
+      ? process.argv.splice(PROJECT_FLAG, 1)[0].slice("--project=".length)
+      : (process.argv.splice(PROJECT_FLAG, 2)[1] ?? "");
+
 const USAGE = `shot — fast screenshots of the app and of CLI output
 
 one-shot
@@ -263,6 +285,7 @@ daemon
 stdout carries the path and nothing else, so it composes:
   open "$(shot app /settings --mock)"
 A failure is one line, last: [shot] error: … — add --verbose for the stack.
+--project <dir> on any command works as that checkout (a worktree of main, say).
 ` + `
 actions (--do, and the arguments to \`shot do\` / \`shot shoot\`)${ACTION_HELP}
 `;
@@ -463,7 +486,10 @@ function report(result, flags) {
     bits.push(`${(result.durationMs / 1000).toFixed(1)}s`, `${result.frames} frames @ ${result.fps}fps`);
     if (result.meta?.truncated) bits.push("truncated at --max-seconds");
   }
-  err(`[shot] ${result.op} · ${bits.join(" · ")} · ${result.mode ?? "daemon"}${size}`);
+  // The checkout on camera, when known: with worktrees, two can serve the app.
+  const app = result.meta?.app;
+  const from = app ? ` · ${app.startsWith(`${homedir()}/`) ? `~${app.slice(homedir().length)}` : app}` : "";
+  err(`[shot] ${result.op} · ${bits.join(" · ")} · ${result.mode ?? "daemon"}${size}${from}`);
   if (result.meta?.exitCode) err(`[shot] command exited ${result.meta.exitCode}`);
   if (result.meta?.hint) err(`[shot] ${result.meta.hint}`);
   // What an `eval:` read off the page. On stderr, so stdout stays the path.
@@ -493,6 +519,7 @@ function report(result, flags) {
 }
 
 async function main() {
+  if (projectArg !== undefined) useProject(projectArg);
   const [command, ...argv] = process.argv.slice(2);
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -600,7 +627,9 @@ async function main() {
   }
   const { flags, rest } = parsed;
   if (flags.verbose) VERBOSE = true;
+  if (flags.project) useProject(flags.project);
   delete flags.verbose;
+  delete flags.project;
 
   let spec;
   if (command === "term") {

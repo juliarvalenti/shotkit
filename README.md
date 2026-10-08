@@ -44,8 +44,22 @@ ln -s ~/Documents/GitHub/shotkit/skills/shotkit ~/.claude/skills/shotkit
 
 shotkit works on the project you run it from: the git top-level of the
 current directory (or the directory itself outside a repo, or
-`SHOTKIT_PROJECT`). Captures land in that project's `.shotkit/` folder, so add
-`.shotkit/` to its `.gitignore`. Each project gets its own daemon.
+`SHOTKIT_PROJECT`, or `--project <dir>` on any command). Captures land in that
+project's `.shotkit/` folder, so add `.shotkit/` to its `.gitignore`. Each
+project gets its own daemon, and with it its own `--mock` dev server.
+
+That makes another checkout easy to shoot — verifying a merged PR on main while
+the working copy is on a branch, say:
+
+```bash
+git worktree add ../app-main main
+shot app /settings --mock --project ../app-main
+```
+
+The timing line names the folder the app is served from when shotkit knows it
+(`[shot] app · 412ms · daemon · 2880x1800 · ~/src/app-main`). A dev server found
+by probing :3000-:3002 that runs from a different folder is still shot, but
+with a line saying so.
 
 A project can describe itself in `shotkit.config.json` at its root. Every field
 is optional:

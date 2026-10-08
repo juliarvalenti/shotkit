@@ -25,6 +25,11 @@ shotkit works on the git top-level of the current directory. Captures land in
 before shooting, and never commit anything from it. `shot doctor` checks the
 machine (browser, pty, ffmpeg, webfonts, a running app) if a shot fails.
 
+To shoot another checkout (a `git worktree` of main, to verify a merged PR),
+pass `--project <dir>`: it gets its own daemon and `--mock` server. The timing
+line ends with the folder being served; if stderr says the app runs from a
+different folder than the project, you are shooting the wrong code.
+
 ## Common shots
 
 ```bash

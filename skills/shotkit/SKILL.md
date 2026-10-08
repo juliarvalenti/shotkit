@@ -25,6 +25,11 @@ shotkit works on the git top-level of the current directory. Captures land in
 before shooting, and never commit anything from it. `shot doctor` checks the
 machine (browser, pty, ffmpeg, webfonts, a running app) if a shot fails.
 
+To shoot another checkout (a `git worktree` of main, to verify a merged PR),
+pass `--project <dir>`: it gets its own daemon and `--mock` server. The timing
+line ends with the folder being served; if stderr says the app runs from a
+different folder than the project, you are shooting the wrong code.
+
 ## Common shots
 
 ```bash
@@ -67,9 +72,23 @@ A bare word or phrase is matched by accessible name, then visible text
 `role=button[name="Save"]`, `text=Save`, or `css=nav button`. `shot help shoot`
 lists every verb.
 
+`wait:<ms>` (a bare number) or `sleep:<ms>` pauses for a transition. A failure
+is one line, last on stderr — `[shot] error: step 2, click:Save: …` — so
+`| tail -1` keeps it; `--verbose` adds the stack.
+
+**Run `shot flows` first.** A project can commit flows (`shotkit/flows/*.json`):
+named steps, storage and a route for getting its UI into a state, like past a
+first-run dialog or into a panel. Use them (`shot app --flow <name>`, also on
+`video` and `open`, with your own `--do` steps after) instead of clicking
+through yourself, and when you work out a flow the project will need again, add
+it there. A config `setup` flow runs before every app capture (`--no-setup`
+skips it).
+
 For a page behind a sign-in dialog, seed what the app keeps in localStorage:
-`--storage key=value` (repeatable), or `--storage-state <file>` for a saved
-Playwright login.
+`--storage key=value` (repeatable; `app.storage` in `shotkit.config.json` sets
+it for every shot), or `--storage-state <file>` for a saved Playwright login.
+Prefer that to clicking a dialog away, which can leave a menu open over the
+shot.
 
 ## Video
 
@@ -132,7 +151,8 @@ about 25ms a frame.
 Optional `shotkit.config.json` at the project root: `app.dir` (where the
 frontend lives), `app.mockScript` / `app.mockEnv` (what `--mock` boots and
 keeps warm), `app.mockHeader` / `app.mockProbe` (how to tell the mock server
-from a real one), `backdrop.canvas` / `backdrop.size` / `backdrop.pixelated`
+from a real one), `app.storage` (localStorage for every shot), `flows` /
+`setup` (committed flows, and one to run first), `backdrop.canvas` / `backdrop.size` / `backdrop.pixelated`
 (the `canvas` backdrop). `SHOTKIT_PROJECT=<dir>` points shotkit at a config
 folder other than the git root, which lets you shoot a repo without adding a
 file to it. See the shotkit README for the full list.

@@ -204,6 +204,12 @@ const APP = {
   mock: { type: "boolean", help: "boot the project's mock dev script (dev:mock) and keep it warm in the daemon" },
 };
 
+/** The project's committed flows (see src/flows.mjs), for ops that open the app. */
+const FLOW = {
+  flow: { type: "list", value: "<name>", help: "run a committed flow first (repeatable; shot flows lists them)" },
+  setup: { type: "boolean", help: "run the project's setup flow first, when it names one (default on; --no-setup)" },
+};
+
 // A take has no still-image business: nothing is clipped to an element, masked,
 // or made transparent, so those flags stay out of `shot help video`.
 const { "full-page": _fullPage, element: _element, mask: _mask, ...VIDEO_PAGE } = PAGE;
@@ -246,6 +252,10 @@ navigation — a page held open, driven step by step
   shot shoot --session r              shoot it as it stands
   shot sessions | shot close --session r
 
+flows — steps the project commits for reuse (shotkit/flows/*.json)
+  shot flows                          what the project ships
+  shot app --flow task-drawer         run one, then shoot
+
 daemon
   shot warm | status | stop | serve
   shot doctor | bench
@@ -258,7 +268,7 @@ actions (--do, and the arguments to \`shot do\` / \`shot shoot\`)${ACTION_HELP}
 `;
 
 const COMMAND_HELP = {
-  app: ["shot app [route] [options]", { ...APP, ...PAGE, ...RESPONSIVE, ...CHROME, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
+  app: ["shot app [route] [options]", { ...APP, ...FLOW, ...PAGE, ...RESPONSIVE, ...CHROME, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   url: ["shot url <url> [options]", { ...PAGE, ...RESPONSIVE, ...CHROME, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   term: ["shot term [options] <command…>   (flags must precede the command)", { ...TERM, ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   text: ["shot text <file|-> [options]", { ...TERM, ...CARD, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
@@ -267,12 +277,12 @@ const COMMAND_HELP = {
     "shot html <file|-> [options]       — a page option (--do, --wait, --full-page…) opens the file as a page",
     { ...CARD, ...PAGE, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON },
   ],
-  open: ["shot open <route|url> [options]   — hold a page open under a name", { ...SESSION, ...APP, ...PAGE, ...RESPONSIVE, ...FRAME, ...DAEMON }],
+  open: ["shot open <route|url> [options]   — hold a page open under a name", { ...SESSION, ...APP, ...FLOW, ...PAGE, ...RESPONSIVE, ...FRAME, ...DAEMON }],
   do: ["shot do <verb:arg…> [options]       — drive the held page", { ...SESSION, ...PAGE, ...DAEMON }],
   shoot: ["shot shoot [verb:arg…] [options]   — shoot the held page as it stands", { ...SESSION, ...PAGE, ...CHROME, ...STAGE, ...FRAME, ...OUTPUT, ...DAEMON }],
   video: [
     "shot video [route|url] [options]   — a recorded take, with a visible cursor",
-    { ...APP, ...VIDEO_PAGE, ...VIDEO_FRAME, ...OUTPUT, ...DAEMON, ...VIDEO, ...VIDEO_STAGE, ...SOUND },
+    { ...APP, ...FLOW, ...VIDEO_PAGE, ...VIDEO_FRAME, ...OUTPUT, ...DAEMON, ...VIDEO, ...VIDEO_STAGE, ...SOUND },
   ],
   sound: [
     "shot sound <video> [options]       — mix its clicks and keys (from <video>.sounds.json) over --bed, and mux",
@@ -340,7 +350,7 @@ function toSpec(op, flags) {
     const state = storageStatePath(flags.storageState ?? process.env.SHOTKIT_STORAGE_STATE);
     if (state) spec.storageState = state;
   }
-  for (const local of ["daemon", "idle", "json", "open", "clickNames"]) delete spec[local];
+  for (const local of ["daemon", "idle", "json", "open", "clickNames", "flow", "setup"]) delete spec[local];
   // `--click Foo` is sugar; the ordered `--do` list is the real interface, so
   // the shorthand lands at the end of it rather than in a second channel.
   if (flags.clickNames?.length) {
@@ -352,6 +362,62 @@ function toSpec(op, flags) {
     spec.range = [a || 1, b || Number.MAX_SAFE_INTEGER];
   }
   return spec;
+}
+
+/** Which flow a `--do` step (1-based) came from, so a failing one can say. */
+let blameStep = (_n) => null;
+
+/**
+ * Put the flows a capture asked for (`--flow`), behind the project's setup
+ * flow, ahead of the spec: their steps run first, their storage is overridden
+ * by `--storage`, and their route, viewport and theme apply only where the
+ * command line names none. The setup flow is for the app, so a URL skips it.
+ *
+ * @param {Record<string, any>} spec @param {Record<string, any>} flags
+ * @param {string | undefined} target the route or URL typed, if any
+ */
+async function withFlows(spec, flags, target) {
+  const { SETUP_FLOW } = await import("../src/project.mjs");
+  const isApp = !spec.url;
+  const names = [...(isApp && SETUP_FLOW && flags.setup !== false ? [SETUP_FLOW] : []), ...(flags.flow ?? [])];
+  if (!names.length) return spec;
+  const { flowOfStep, loadFlows, resolveFlows } = await import("../src/flows.mjs");
+  const flow = resolveFlows(names, loadFlows());
+  blameStep = (n) => flowOfStep(n, flow.segments);
+  const framed = ["viewport", "viewports", "responsive", "width", "height"].some((k) => spec[k] !== undefined);
+  return {
+    ...spec,
+    storage: { ...flow.storage, ...(spec.storage ?? {}) },
+    do: [...flow.do, ...(spec.do ?? [])],
+    ...(isApp && !target && flow.route ? { route: flow.route } : {}),
+    ...(!framed && flow.viewport ? { viewport: flow.viewport } : {}),
+    ...(spec.theme === undefined && flow.theme ? { theme: flow.theme } : {}),
+  };
+}
+
+/** `shot flows`: what the project ships, so an agent finds them before writing its own. */
+async function listFlows(argv) {
+  const { flags } = parse(argv, { json: OUTPUT.json });
+  const { FLOWS_DIR, PROJECT_ROOT, SETUP_FLOW } = await import("../src/project.mjs");
+  const { loadFlows } = await import("../src/flows.mjs");
+  const flows = [...loadFlows().values()].map(({ file, ...f }) => ({ ...f, setup: f.name === SETUP_FLOW }));
+  if (flags.json) {
+    process.stdout.write(`${JSON.stringify(flows, null, 2)}\n`);
+    return;
+  }
+  const where = FLOWS_DIR.startsWith(`${PROJECT_ROOT}/`) ? FLOWS_DIR.slice(PROJECT_ROOT.length + 1) : FLOWS_DIR;
+  if (!flows.length) {
+    err(`[shot] no flows in ${where}/ — see "Flows" in the shotkit README`);
+    return;
+  }
+  const width = Math.max(...flows.map((f) => f.name.length));
+  for (const f of flows) {
+    const notes = [f.setup && "setup, runs first on every app capture", f.uses?.length && `uses ${f.uses.join(", ")}`, f.route]
+      .filter(Boolean)
+      .join(" · ");
+    process.stdout.write(`${f.name.padEnd(width)}  ${f.description ?? ""}${notes ? `  (${notes})` : ""}\n`);
+  }
+  err(`[shot] ${flows.length} in ${where}/ · shot app --flow <name>`);
 }
 
 async function runSpec(spec, flags) {
@@ -484,6 +550,11 @@ async function main() {
     return;
   }
 
+  if (command === "flows") {
+    await listFlows(argv);
+    return;
+  }
+
   if (command === "doctor") {
     const { doctor } = await import("../src/doctor.mjs");
     await doctor();
@@ -541,6 +612,7 @@ async function main() {
     const target = rest[0] ?? "/";
     if (isUrl(target)) spec.url = target;
     else spec.route = target;
+    spec = await withFlows(spec, flags, rest[0]);
   } else if (command === "do" || command === "shoot") {
     spec = toSpec(command === "do" ? "act" : "shoot", flags);
     // Bare positionals are actions, so the common case reads as a sentence:
@@ -583,6 +655,7 @@ async function main() {
     const target = rest[0] ?? "/";
     if (isUrl(target)) spec.url = target;
     else spec.route = target;
+    spec = await withFlows(spec, flags, rest[0]);
   } else if (command === "url") {
     if (!rest[0]) throw new Error("shot url needs a URL");
     spec = toSpec("url", flags);
@@ -590,6 +663,7 @@ async function main() {
   } else {
     spec = toSpec("app", flags);
     spec.route = rest[0] ?? "/";
+    spec = await withFlows(spec, flags, rest[0]);
   }
 
   const result = await runSpec(spec, flags);
@@ -603,6 +677,12 @@ main().catch((e) => {
   let message = String(e?.message ?? e).replace(/^(Error: )+/, "");
   const cut = message.indexOf("\nCall log:");
   if (cut !== -1) message = message.slice(0, cut).trimEnd();
+  const step = /^step (\d+), /.exec(message);
+  if (step) {
+    // Combined with the flows' steps, the number alone points at the wrong line.
+    const from = blameStep(Number(step[1]));
+    if (from) message = `${from.flow ? `flow ${from.flow}, ` : ""}${message.replace(/^step \d+/, `step ${from.step}`)}`;
+  }
   if (VERBOSE && e?.stack) err(String(e.stack));
   err(`[shot] error: ${message}`);
   process.exit(e instanceof UsageError ? 2 : 1);

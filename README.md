@@ -57,8 +57,11 @@ is optional:
     "mockScript": "dev:mock",
     "mockEnv": { "UI_MOCK": "1" },
     "mockHeader": "x-mock",
-    "mockProbe": "/api/health"
+    "mockProbe": "/api/health",
+    "storage": { "onboarded": "1" }
   },
+  "flows": "shotkit/flows",
+  "setup": "signed-in",
   "backdrop": { "canvas": "scripts/canvas.js", "size": "1920x1080", "pixelated": false }
 }
 ```
@@ -69,6 +72,9 @@ is optional:
 | `app.mockScript` | the package.json script `--mock` runs (default `dev:mock`) |
 | `app.mockEnv` | extra environment for that script |
 | `app.mockHeader` / `app.mockProbe` | a response header (value `1`) on a route that proves a running dev server is the mock one; without it, any running dev server is attached to |
+| `app.storage` | localStorage every app capture (and `open`, `video`) starts with — a first-run dialog already dismissed, say; `--storage` still wins |
+| `flows` | where the project's committed flows live (default `shotkit/flows`; see **Flows**) |
+| `setup` | a flow every app capture runs first (`--no-setup` skips it) |
 | `backdrop.canvas` | a canvas script for `--backdrop canvas` (see **The desktop**) |
 | `backdrop.size` | the page the script paints on, `WxH` in CSS px (default `1920x1080`) |
 | `backdrop.pixelated` | upscale the painting hard-edged, for pixel art (default `false`, smooth) |
@@ -104,6 +110,7 @@ speedup: 13.1x
 | `shot html <file\|->` | render an HTML document; with a page option (`--do`, `--wait`, `--full-page`) it opens the file as a page |
 | `shot video [route]` | record a short take — see **Video** |
 | `shot open` / `do` / `shoot` / `close` | drive a page held open — see **Navigation** |
+| `shot flows` | the project's committed flows — see **Flows** |
 | `shot warm` / `status` / `stop` / `serve` | the daemon |
 | `shot doctor` / `bench` | check and time this machine |
 
@@ -171,6 +178,45 @@ Save, not a `<save>` element. Words that are also tag names are no exception:
 `<table>` element when nothing carries that label. Phrases are labels too —
 `click:Save changes` is a button, not a descendant selector — so a selector made
 only of tag names and spaces needs saying explicitly: `css=nav button`.
+
+`wait:<sel>` waits for an element; `wait:<ms>` (a bare number) or `sleep:<ms>`
+pauses for a fixed time, for a transition after a click. A step that fails says
+which one, in one line: `[shot] error: step 2, click:Save: …`. `--verbose` (or
+`SHOTKIT_DEBUG=1`) adds the stack and Playwright's call log.
+
+## Flows
+
+What a project knows about getting its UI into a state — past a first-run
+dialog, into a given panel — can be committed once instead of rediscovered by
+every agent. A flow is a JSON file in `shotkit/flows/` (or wherever
+`shotkit.config.json` says with `flows`), named by its file:
+
+```jsonc
+// shotkit/flows/signed-in.json
+{ "description": "Skip the first-run name dialog as @operator",
+  "storage": { "app.principal": "operator", "app.name-asked": "1" } }
+
+// shotkit/flows/task-drawer.json
+{ "description": "A task open in the Memory panel drawer",
+  "uses": ["signed-in"],
+  "route": "/room/checkout",
+  "do": ["click:Memory", "click:add-apple-pay", "wait-text:Reply in this thread"] }
+```
+
+```bash
+shot flows                                   # what the project ships
+shot app --flow task-drawer                  # run it, then shoot
+shot video --flow task-drawer --do click:Reply
+shot open --flow task-drawer --session t
+```
+
+A flow takes `description`, `uses`, `route`, `storage`, `do`, `viewport` and
+`theme`. `uses` runs other flows first (each once). The command line wins:
+`--do` steps run after the flow's, `--storage` overrides its storage, and a
+route, `--viewport` or `--theme` typed replaces the flow's. `"setup": "<flow>"`
+in the config runs that flow before every app capture; `--no-setup` skips it.
+A step that no longer resolves names the flow: `[shot] error: flow
+task-drawer, step 2, click:add-apple-pay: …`.
 
 ## Signed in
 
@@ -317,6 +363,9 @@ shot app / --chrome --theme dark --chrome-theme light
 
 `--theme` drives the app's own theme, not just the browser's `prefers-color-scheme`:
 next-themes reads `localStorage` before first paint and would otherwise ignore it.
+Any other key the app reads before first paint is seeded the same way:
+`--storage key=value` (repeatable), or `app.storage` in `shotkit.config.json`
+for every shot.
 
 ## Tech-demo framing
 

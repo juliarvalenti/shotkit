@@ -17,7 +17,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { Engine, pngSize, writeShot } from "./engine.mjs";
-import { PROJECT_ROOT } from "./project.mjs";
+import { APP_STORAGE, PROJECT_ROOT } from "./project.mjs";
 import { codeDocument } from "./code.mjs";
 import { terminalDocument } from "./terminal.mjs";
 import { cardDocument, imageCardDocument } from "./card.mjs";
@@ -261,10 +261,14 @@ export async function capture(spec, ctx = {}) {
  * before first paint and wins. So `--theme light` has to write that key too,
  * or it produces a light frame around an unchanged dark app. An explicit
  * `--storage theme=…` still takes precedence.
+ *
+ * The project's `app.storage` goes in between: what a "ready" first load looks
+ * like (a first-run dialog already dismissed, say) is decided once in
+ * shotkit.config.json, and `--storage` still overrides it per shot.
  */
 function themedStorage(spec, isApp = spec.op === "app") {
   if (!isApp) return spec.storage;
-  return { theme: spec.theme ?? "dark", ...(spec.storage ?? {}) };
+  return { theme: spec.theme ?? "dark", ...APP_STORAGE, ...(spec.storage ?? {}) };
 }
 
 /**
@@ -508,7 +512,14 @@ export async function session(spec, ctx = {}) {
   if (spec.op === "open") {
     const { url, baseUrl } = await resolvePageUrl({ ...spec, op: spec.url ? "url" : "app" }, log);
     const frame = viewportList(spec)[0]?.viewport;
-    const meta = await eng.openSession(name, { ...spec, ...(frame ?? {}), url, baseUrl, settle: spec.settle ?? "fast" });
+    const meta = await eng.openSession(name, {
+      ...spec,
+      ...(frame ?? {}),
+      url,
+      baseUrl,
+      settle: spec.settle ?? "fast",
+      storage: themedStorage(spec, !spec.url),
+    });
     return { ok: true, op: "open", session: meta, ms: { total: Date.now() - t0 } };
   }
   if (spec.op === "act") {

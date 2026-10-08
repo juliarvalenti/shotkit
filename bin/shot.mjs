@@ -181,6 +181,7 @@ const TERM = {
   pty: { type: "boolean", help: "run under a pty so Rich emits color (default on)" },
   prompt: { type: "string", value: "<sigil>", help: "prompt sigil, or --no-prompt to hide the line" },
   "show-exit": { type: "boolean", help: "show a non-zero exit code (default on)" },
+  verbose: { type: "boolean", help: "on failure, print the stack too" },
   "command-timeout": { type: "number", value: "<ms>", help: "kill the command after N ms" },
   env: { type: "map", value: "<k>=<v>", help: "extra environment (repeatable)" },
   echo: { type: "boolean", help: "include the plain-text output in --json" },
@@ -209,6 +210,16 @@ const { "full-page": _fullPage, element: _element, mask: _mask, ...VIDEO_PAGE } 
 const { transparent: _transparent, ...VIDEO_FRAME } = FRAME;
 
 const err = (m) => process.stderr.write(`${m}\n`);
+
+/**
+ * `--verbose` is taken out of argv before any command parses it, so it works
+ * the same after every command: a failure then prints its stack. Not after
+ * `shot term`, whose line belongs to the child from its first word on; there it
+ * is an ordinary flag ahead of the command.
+ */
+const VERBOSE_FLAG = process.argv[2] === "term" ? -1 : process.argv.indexOf("--verbose");
+if (VERBOSE_FLAG !== -1) process.argv.splice(VERBOSE_FLAG, 1);
+let VERBOSE = VERBOSE_FLAG !== -1 || Boolean(process.env.SHOTKIT_DEBUG || process.env.SHOT_DEBUG);
 
 const USAGE = `shot — fast screenshots of the app and of CLI output
 
@@ -241,6 +252,7 @@ daemon
 
 stdout carries the path and nothing else, so it composes:
   open "$(shot app /settings --mock)"
+A failure is one line, last: [shot] error: … — add --verbose for the stack.
 ` + `
 actions (--do, and the arguments to \`shot do\` / \`shot shoot\`)${ACTION_HELP}
 `;
@@ -516,6 +528,8 @@ async function main() {
     throw e;
   }
   const { flags, rest } = parsed;
+  if (flags.verbose) VERBOSE = true;
+  delete flags.verbose;
 
   let spec;
   if (command === "term") {
@@ -583,10 +597,13 @@ async function main() {
 }
 
 main().catch((e) => {
-  // What went wrong, once: an error relayed from the daemon arrives as
-  // "Error: Error: …", and a stack says nothing to someone who mistyped a flag.
-  // SHOT_DEBUG=1 brings the stack back.
-  const message = String(e?.message ?? e).replace(/^(Error: )+/, "");
-  err(`[shot] ${process.env.SHOT_DEBUG ? (e?.stack ?? e) : message}`);
+  // What went wrong, once, at the end of the output where `| tail -1` keeps it.
+  // A stack says nothing to someone who mistyped a flag, and Playwright's call
+  // log is detail; --verbose (or SHOTKIT_DEBUG=1) brings both back, first.
+  let message = String(e?.message ?? e).replace(/^(Error: )+/, "");
+  const cut = message.indexOf("\nCall log:");
+  if (cut !== -1) message = message.slice(0, cut).trimEnd();
+  if (VERBOSE && e?.stack) err(String(e.stack));
+  err(`[shot] error: ${message}`);
   process.exit(e instanceof UsageError ? 2 : 1);
 });

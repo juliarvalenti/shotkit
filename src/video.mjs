@@ -23,8 +23,8 @@
  * recorder's business and not the caller's.
  */
 
-import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, extname } from "node:path";
 import { OVERLAY_DEFAULTS, installOverlay } from "./cursor.mjs";
 import { defaultFormat, findEncoder, startEncoder } from "./encode.mjs";
 import { frameOf, policyOf, preparePage, seedStorage } from "./engine.mjs";
@@ -160,6 +160,9 @@ export async function record(eng, spec, ctx) {
   /** @type {ReturnType<typeof startSpool> | null} */
   let spool = null;
   try {
+    // As a screenshot does: ffmpeg won't make the folder, and dies writing to
+    // it before the first frame, which surfaces only as a broken pipe.
+    await mkdir(dirname(ctx.out), { recursive: true });
     await page.goto(spec.url, { waitUntil: spec.waitUntil ?? "domcontentloaded", timeout: spec.timeout ?? 30_000 });
     // Waits, hidden selectors and extra CSS, but not the actions: those are the
     // take, and they have to happen with the camera rolling.

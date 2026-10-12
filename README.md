@@ -194,7 +194,10 @@ Save, not a `<save>` element. Words that are also tag names are no exception:
 only of tag names and spaces needs saying explicitly: `css=nav button`.
 
 `wait:<sel>` waits for an element; `wait:<ms>` (a bare number) or `sleep:<ms>`
-pauses for a fixed time, for a transition after a click. A step that fails says
+pauses for a fixed time, for a transition after a click. `drag:<sel>@<dx>,<dy>`
+presses on the middle of an element, moves the pointer that many pixels and
+lets go, for panning a canvas or moving a handle; in a take, the drawn pointer
+carries the press along. A step that fails says
 which one, in one line: `[shot] error: step 2, click:Save: …`. `--verbose` (or
 `SHOTKIT_DEBUG=1`) adds the stack and Playwright's call log.
 

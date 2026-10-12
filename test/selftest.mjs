@@ -17,7 +17,7 @@ import { splitHighlightedLines, guessLanguage } from "../src/code.mjs";
 import { parse, UsageError } from "../src/args.mjs";
 import { policyArgs, policyKey } from "../src/network.mjs";
 import { resolveViewport, viewportList } from "../src/viewports.mjs";
-import { locate, parseAction } from "../src/actions.mjs";
+import { locate, parseAction, parseDrag } from "../src/actions.mjs";
 import { backdrop, palette } from "../src/theme.mjs";
 import { ART_RENDERING, CANVAS_VARS, VEIL, canvasDocument } from "../src/canvas.mjs";
 import { CANVAS_PIXELATED } from "../src/project.mjs";
@@ -224,6 +224,14 @@ test("--responsive expands to the breakpoint ladder", () => {
 test("an action splits on its first colon only", () => {
   assert.deepEqual(parseAction("fill:#q=a:b"), { verb: "fill", arg: "#q=a:b" });
   assert.deepEqual(parseAction("reload"), { verb: "reload", arg: "" });
+});
+
+test("a drag argument splits into a target and an offset on its last @", () => {
+  assert.deepEqual(parseDrag("#map@-40,25"), { target: "#map", dx: -40, dy: 25 });
+  assert.deepEqual(parseDrag("[data-x='a@b']@10, 0"), { target: "[data-x='a@b']", dx: 10, dy: 0 });
+  assert.throws(() => parseDrag("#map"), /drag:<selector>@<dx>,<dy>/);
+  assert.throws(() => parseDrag("#map@10"), /drag:<selector>@<dx>,<dy>/);
+  assert.throws(() => parseDrag("#map@1,2,3"), /drag:<selector>@<dx>,<dy>/);
 });
 
 test("a zoom argument splits into a target and a factor", () => {

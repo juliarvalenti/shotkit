@@ -485,6 +485,23 @@ export function makeCursor(page, opts) {
     },
 
     /**
+     * Travel to the middle of `locator`, press, carry the pointer `dx`, `dy`
+     * at a hand's pace with the press still drawn, and let go there.
+     */
+    async drag(locator, dx, dy, o = {}) {
+      const p = await pointOf(locator, o);
+      await glideTo(p.x, p.y);
+      await page.evaluate(() => window.__shotkit?.press(true)).catch(() => {});
+      opts.sounds?.push({ at: Date.now(), kind: "click" });
+      await page.mouse.down();
+      await sleep(timing.pressMs);
+      await glideTo(p.x + dx, p.y + dy, timing.moveMs * 1.5);
+      await page.mouse.up();
+      await page.evaluate(() => window.__shotkit?.press(false)).catch(() => {});
+      return p;
+    },
+
+    /**
      * `zoom:out` | `zoom:2` (on the pointer) | `zoom:<sel>[@factor]`.
      * `o.locate` resolves a selector the way the rest of the action list does,
      * which includes asking the page whether a bare word is a label or a tag.

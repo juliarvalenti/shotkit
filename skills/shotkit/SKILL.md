@@ -10,10 +10,16 @@ background daemon, so the first shot costs ~2s and later ones ~150ms. It
 prints the absolute output path on stdout and nothing else; read that file
 back to see the result.
 
-If `shot` is not on PATH, run it from the shotkit checkout: this file sits at
-`skills/shotkit/SKILL.md` inside it, so the checkout is two folders up from
-this skill's own folder, and the command is `node <checkout>/bin/shot.mjs`. If
-there is no checkout, clone one wherever the person keeps repositories:
+If `shot` is not on PATH, run it from the shotkit checkout. To find the
+checkout:
+
+1. Take this skill's own folder. It is usually a link into the checkout
+   (`~/.claude/skills/shotkit`), so resolve it first: `realpath <skill folder>`.
+2. The checkout is two folders up from the resolved path, since the skill
+   lives at `skills/shotkit/` inside it.
+3. Run `node <checkout>/bin/shot.mjs`.
+
+If there is no checkout, clone one wherever the person keeps repositories:
 `git clone https://github.com/juliarvalenti/shotkit && cd shotkit && npm install && npm link`.
 
 If the current repo has its own `screenshot` skill (mycelium does), use that

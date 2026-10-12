@@ -5,15 +5,16 @@ description: Take a screenshot of a running web app or any URL, render CLI outpu
 
 # shotkit
 
-`shot` (repo: github.com/juliarvalenti/shotkit, checkout at
-`~/Documents/GitHub/shotkit`) holds a browser open in a background daemon, so
-the first shot costs ~2s and later ones ~150ms. It prints the absolute output
-path on stdout and nothing else; read that file back to see the result.
+`shot` (repo: github.com/juliarvalenti/shotkit) holds a browser open in a
+background daemon, so the first shot costs ~2s and later ones ~150ms. It
+prints the absolute output path on stdout and nothing else; read that file
+back to see the result.
 
-If `shot` is not on PATH, use `node ~/Documents/GitHub/shotkit/bin/shot.mjs`.
-If the checkout is missing: `git clone https://github.com/juliarvalenti/shotkit
-~/Documents/GitHub/shotkit && cd ~/Documents/GitHub/shotkit && npm install &&
-npm link`.
+If `shot` is not on PATH, run it from the shotkit checkout: this file sits at
+`skills/shotkit/SKILL.md` inside it, so the checkout is two folders up from
+this skill's own folder, and the command is `node <checkout>/bin/shot.mjs`. If
+there is no checkout, clone one wherever the person keeps repositories:
+`git clone https://github.com/juliarvalenti/shotkit && cd shotkit && npm install && npm link`.
 
 If the current repo has its own `screenshot` skill (mycelium does), use that
 one instead.

@@ -22,8 +22,8 @@ standalone version, usable from any project.
 ## Install
 
 ```bash
-git clone https://github.com/juliarvalenti/shotkit ~/Documents/GitHub/shotkit
-cd ~/Documents/GitHub/shotkit && npm install && npm link   # puts `shot` on PATH
+git clone https://github.com/juliarvalenti/shotkit
+cd shotkit && npm install && npm link   # puts `shot` on PATH
 shot doctor
 ```
 
@@ -34,10 +34,10 @@ Chromium is on disk; `shot doctor` says what it found.
 
 `skills/shotkit/SKILL.md` teaches a coding agent to use `shot`. Link it into
 your personal skills so it is available in every project, and stays current
-with `git pull`:
+with `git pull`. From the checkout:
 
 ```bash
-ln -s ~/Documents/GitHub/shotkit/skills/shotkit ~/.claude/skills/shotkit
+mkdir -p ~/.claude/skills && ln -s "$PWD/skills/shotkit" ~/.claude/skills/shotkit
 ```
 
 ## The project

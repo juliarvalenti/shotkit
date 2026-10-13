@@ -255,6 +255,14 @@ shotkit never reads, prints or copies it. Re-saving it (the session expired, the
 shots show the login page again) takes effect on the next shot, since contexts
 are pooled per file *and* its modification time.
 
+A flow that needs a browser permission headless can't ask for, like a Copy
+button writing to the clipboard, gets it with `--grant` (repeatable):
+
+```bash
+shot open /room/checkout --session c --grant clipboard-write --grant clipboard-read
+shot do click:Copy image "eval:navigator.clipboard.read().then(i => i[0].types)" --session c
+```
+
 The file is a session credential: keep it in your home directory, never in a
 repo, and never in `.shotkit/`, which is only gitignored, not private.
 

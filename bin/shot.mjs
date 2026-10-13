@@ -174,6 +174,11 @@ const PAGE = {
   timeout: { type: "number", value: "<ms>", help: "per-wait timeout (default 30000)" },
   offline: { type: "boolean", help: "resolve nothing but localhost — skips slow or unreachable CDNs" },
   block: { type: "list", value: "<host>", help: "fail this host's lookups immediately (repeatable)" },
+  grant: {
+    type: "list",
+    value: "<permission>",
+    help: "grant the page a browser permission, e.g. clipboard-write (repeatable)",
+  },
 };
 
 const TERM = {

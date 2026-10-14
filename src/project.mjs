@@ -117,4 +117,6 @@ export const STAGE_STYLE = {
   accent: config.stage?.accent ?? null,
   /** @type {string | null} absolute path */
   logo: config.stage?.logo ? resolve(PROJECT_ROOT, config.stage.logo) : null,
+  /** @type {string | null} absolute path of a stylesheet that restyles the captions and title cards */
+  css: config.stage?.css ? resolve(PROJECT_ROOT, config.stage.css) : null,
 };

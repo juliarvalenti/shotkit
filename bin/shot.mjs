@@ -457,10 +457,17 @@ async function runSpec(spec, flags) {
       const { ensureDaemon, send } = await import("../src/ipc.mjs");
       await ensureDaemon({ idleMs: flags.idle });
       // A take runs for as long as it runs; the default request timeout is
-      // sized for a screenshot and would cut one short.
-      const timeout = spec.op === "video" ? Math.max(180_000, (spec.maxSeconds ?? 90) * 1000 + 120_000) : undefined;
+      // sized for a screenshot and would cut one short. `speed:` plays waits
+      // back faster than they happen, so a take's wall time can be several
+      // times its length.
+      const timeout =
+        spec.op === "video" ? Math.max(180_000, (spec.maxSeconds ?? 90) * 1000 * 8 + 300_000) : undefined;
       return await send(isSession ? "session" : "shot", { spec }, timeout ? { timeout } : {});
     } catch (e) {
+      // A request the daemon took and didn't answer in time may still be
+      // running there; running it again here would repeat everything it does
+      // to the page, such as sending a message twice.
+      if (e.timedOut) throw e;
       // A failure the daemon reported is this shot's failure — retrying it in
       // this process would only lose the daemon's state (a booted mock server,
       // a warm cache) and produce a second, more confusing error.

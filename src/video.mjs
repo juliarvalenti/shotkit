@@ -309,6 +309,7 @@ async function stageWords(spec) {
     ...(STAGE_STYLE.textFont ? { textFont: STAGE_STYLE.textFont } : {}),
     ...(STAGE_STYLE.accent ? { accent: STAGE_STYLE.accent } : {}),
     ...(logo ? { logo } : {}),
+    ...(STAGE_STYLE.css ? { css: await readFile(STAGE_STYLE.css, "utf8") } : {}),
     at: spec.captionAt === "top" ? "top" : "bottom",
   };
 }

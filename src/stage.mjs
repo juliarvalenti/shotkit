@@ -147,6 +147,7 @@ export function driftAt(tilt, drift, t) {
  * @property {string} [fonts] a stylesheet URL for the faces
  * @property {string} [titleFont] @property {string} [titleStyle] @property {string} [textFont]
  * @property {string} [accent] @property {string} [logo] a data: URL
+ * @property {string} [css] the project's own rules, after the built-in ones: `#cap`, `#cap .t`, `#cap .s`, `#cap .bar`, `#title`, `#title .panel`
  * @property {"bottom"|"top"} [at] where a caption sits
  */
 
@@ -237,6 +238,7 @@ html,body{margin:0;padding:0;background:transparent}
   transform:${tiltTransform(o.tilt, k, o.perspective)};will-change:transform}
 #win img{display:block;width:${o.imgWidth}px;height:${o.imgHeight}px}
 ${words}
+${wd?.css ?? ""}
 </style></head><body><div id="canvas">${o.live ?? ""}${o.art && !o.live ? '<div id="art"></div>' : ""}${grid}${glow}
 <div id="scene"><div id="win"><img id="shot" alt="" ${o.src ? `src="${o.src}"` : ""}></div></div>${
     wd ? `<div id="cap"></div><div id="title"><div class="panel">${wd.logo ? `<img src="${wd.logo}" alt="">` : ""}<div class="t"></div><div class="s"></div></div></div>` : ""

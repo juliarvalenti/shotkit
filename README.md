@@ -436,9 +436,12 @@ with the project's logo above it. The faces, the accent and the logo come from
   "titleStyle": "italic 600",
   "textFont": "\"IBM Plex Sans\", system-ui, sans-serif",
   "accent": "#5dd4e0",
-  "logo": "docs/logo.png"
+  "logo": "docs/logo.png",
+  "css": "shotkit/stage.css"
 }
 ```
+
+`css` is a stylesheet read after the built-in rules, to restyle the words entirely: `#cap` (the caption panel, with `.bar`, `.t`, `.s`), `#title` and `#title .panel` (the cards).
 
 | | |
 |---|---|
